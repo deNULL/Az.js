@@ -1,0 +1,39 @@
+{
+  "name": "az",
+  "version": "0.1.0",
+  "authors": [
+    "Denis Olshin <me@denull.ru>"
+  ],
+  "description": "NLP library for Russian language",
+  "main": "dist/az.min.js",
+  "moduleType": [
+    "amd",
+    "es6",
+    "globals",
+    "node",
+    "yui"
+  ],
+  "keywords": [
+    "NLP",
+    "natural",
+    "language",
+    "processing",
+    "morphology",
+    "syntax",
+    "tokenization",
+    "words",
+    "names",
+    "parse",
+    "inflect",
+    "Russian"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/deNULL/Az.js#readme",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ]
+}
