@@ -211,11 +211,11 @@
     }
 
     var vars = [];
-    console.log(opts);
+    //console.log(opts);
     for (var i = 0; i < opts.length; i++) {
       for (var j = 0; j < opts[i][1].length; j++) {
         var word = new Word(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
-        word.log();
+        //word.log();
         vars.push(word);
       }
     }
