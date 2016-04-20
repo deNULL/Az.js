@@ -3,15 +3,17 @@ var gulp = require('gulp'),
     uglify = require('gulp-uglify'),
     concat = require('gulp-concat'),
     rename = require('gulp-rename'),
-    filesize = require('gulp-filesize');
+    filesize = require('gulp-filesize'),
+    sourcemaps = require('gulp-sourcemaps');
 
 gulp.task('default', function() {
   return gulp.src(['src/az.js', 'src/az.*.js'])
+    .pipe(sourcemaps.init())
     .pipe(concat('az.js'))
     .pipe(gulp.dest('dist'))
     .pipe(uglify())
     .pipe(rename('az.min.js'))
+    .pipe(sourcemaps.write('.'))
     .pipe(gulp.dest('dist'))
-    .pipe(filesize())
     .on('error', gutil.log);
 });
