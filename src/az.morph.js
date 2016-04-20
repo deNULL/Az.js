@@ -1,4 +1,4 @@
-//(function() {
+(function() {
   var words,
       probabilities,
       predictionSuffixes = new Array(3),
@@ -310,4 +310,4 @@
       loaded();
     });
   }
-//})();
+})();

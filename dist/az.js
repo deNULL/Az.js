@@ -323,7 +323,7 @@ var Az = {
     return results;
   }
 })();
-//(function() {
+(function() {
   var words,
       probabilities,
       predictionSuffixes = new Array(3),
@@ -635,7 +635,7 @@ var Az = {
       loaded();
     });
   }
-//})();
+})();
 (function() {
   // TBD: Syntax analyzer
   var Syntax = Az.Syntax = function() {

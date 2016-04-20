@@ -1,7 +1,7 @@
 {
   "name": "az",
   "version": "0.1.0",
-  "description": "NLP library for Russian language",
+  "description": "A NLP library for Russian language",
   "main": "dist/az.min.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

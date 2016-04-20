@@ -4,7 +4,7 @@
   "authors": [
     "Denis Olshin <me@denull.ru>"
   ],
-  "description": "NLP library for Russian language",
+  "description": "A NLP library for Russian language",
   "main": "dist/az.min.js",
   "moduleType": [
     "amd",
