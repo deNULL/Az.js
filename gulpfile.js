@@ -13,7 +13,7 @@ gulp.task('default', function() {
     .pipe(gulp.dest('dist'))
     .pipe(uglify())
     .pipe(rename('az.min.js'))
-    .pipe(sourcemaps.write('.'))
+    .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: '../src' }))
     .pipe(gulp.dest('dist'))
     .on('error', gutil.log);
 });
