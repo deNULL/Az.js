@@ -12,7 +12,7 @@
     }
   };
   /* TODO: add more named HTML entities */
-  var HTML_ENTITIES = { nbsp: ' ', quot: '\'' };
+  var HTML_ENTITIES = { nbsp: ' ', quot: '"', gt: '>', lt: '<' };
 
   for (var i = 0; i < TLDs.length; i++) {
     defaults.links.tlds[TLDs[i]] = true;
@@ -92,6 +92,7 @@
       if (token) {
         // Preprocess last token
         if (config.links && config.links.tlds &&
+            charType == 'PUNCT' &&
             this.tokens.length > 2 &&
             this.tokens[last - 2].type == 'WORD' &&
             this.tokens[last - 1].s == '.' &&
@@ -114,9 +115,13 @@
             token.type = 'EMAIL';
           } else {
             token.type = 'LINK';
+
+            if (ch == '/') {
+              append = true;
+            }
           }
           this.tokens.length = last + 1;
-        }
+        } else
 
         // Process next char (start new token or append to the previous one)
         if (token.type == 'LINK') {
