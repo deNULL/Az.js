@@ -136,7 +136,7 @@
 
         // Preprocess last token
         if (config.links && config.links.tlds &&
-            charType == 'PUNCT' &&
+            (charType == 'PUNCT' || charType == 'SPACE') &&
             this.tokens.length > 2 &&
             this.tokens[last - 2].type == 'WORD' &&
             this.tokens[last - 1].s == '.' &&
