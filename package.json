@@ -31,12 +31,15 @@
   },
   "homepage": "https://github.com/deNULL/Az.js#readme",
   "devDependencies": {
+    "chai": "^3.5.0",
     "gulp": "^3.9.1",
     "gulp-concat": "^2.6.0",
     "gulp-filesize": "0.0.6",
     "gulp-rename": "^1.2.2",
     "gulp-sourcemaps": "^2.0.0-alpha",
     "gulp-uglify": "^1.5.3",
-    "gulp-util": "^3.0.7"
+    "gulp-util": "^3.0.7",
+    "mocha": "^2.4.5",
+    "sinon": "^1.17.3"
   }
 }
