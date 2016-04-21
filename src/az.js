@@ -1,15 +1,24 @@
-var Az = {
-  load: function(url, responseType, callback) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url, true);
-    xhr.responseType = responseType;
+;(function (global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  global.Az = factory()
+}(this, function () { 'use strict';
 
-    xhr.onload = function (e) {
-      if (xhr.response) {
-        callback && callback(xhr.response);
-      }
-    };
+  var Az = {
+    load: function(url, responseType, callback) {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.responseType = responseType;
 
-    xhr.send(null);
-  }
-};
+      xhr.onload = function (e) {
+        if (xhr.response) {
+          callback && callback(xhr.response);
+        }
+      };
+
+      xhr.send(null);
+    }
+  };
+
+  return Az;
+}));

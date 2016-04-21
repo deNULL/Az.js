@@ -1,4 +1,8 @@
-(function() {
+;(function (global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  global.Az.Morph = factory()
+}(this, function () { 'use strict';
   var words,
       probabilities,
       predictionSuffixes = new Array(3),
@@ -188,7 +192,7 @@
     console.groupEnd();
   }
 
-  var Morph = Az.Morph = function(word, config) {
+  var Morph = function(word, config) {
     config = config || defaults;
 
     for (var k in defaults) {
@@ -222,11 +226,11 @@
     return vars;
   }
 
-  Az.Morph.setDefaults = function(config) {
+  Morph.setDefaults = function(config) {
     defaults = config;
   }
 
-  Az.Morph.init = function(path, callback) {
+  Morph.init = function(path, callback) {
     var loading = 0;
     var tagsInt, tagsExt;
     function loaded() {
@@ -310,4 +314,6 @@
       loaded();
     });
   }
-})();
+
+  return Morph;
+}));

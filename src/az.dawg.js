@@ -1,4 +1,8 @@
-(function() {
+;(function (global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  global.Az.DAWG = factory()
+}(this, function () { 'use strict';
   var ROOT = 0,
       MISSING = -1,
       PRECISION_MASK = 0xFFFFFFFF,
@@ -49,7 +53,7 @@
     return base & ~IS_LEAF_BIT & PRECISION_MASK;
   }
 
-  var DAWG = Az.DAWG = function(units, guide, format) {
+  var DAWG = function(units, guide, format) {
     this.units = units;
     this.guide = guide;
     this.format = format;
@@ -307,4 +311,6 @@
     }
     return results;
   }
-})();
+
+  return DAWG;
+}));
