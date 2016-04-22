@@ -31,6 +31,7 @@
   },
   "homepage": "https://github.com/deNULL/Az.js#readme",
   "devDependencies": {
+    "blanket": "^1.2.3",
     "chai": "^3.5.0",
     "gulp": "^3.9.1",
     "gulp-concat": "^2.6.0",
@@ -41,5 +42,11 @@
     "gulp-util": "^3.0.7",
     "mocha": "^2.4.5",
     "sinon": "^1.17.3"
+  },
+  "config": {
+    "blanket": {
+      "pattern": [ "" ],
+      "data-cover-never": [ "node_modules", "test" ]
+    }
   }
 }

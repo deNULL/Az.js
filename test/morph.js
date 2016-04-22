@@ -1,5 +1,5 @@
 var expect = require('chai').expect;
-var Az = require('..');
+var Az = require('../dist/az');
 
 describe('Az.Morph', function() {
   before(function(done) {
