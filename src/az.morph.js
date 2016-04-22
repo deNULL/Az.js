@@ -1,7 +1,7 @@
 ;(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define(factory) :
-  global.Az.Morph = factory()
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Morph = factory()) :
+  typeof define === 'function' && define.amd ? define('Az.Morph', ['Az', 'Az.DAWG'], factory) :
+  (global.Az = global.Az || {}) && (global.Az.Morph = factory())
 }(this, function () { 'use strict';
   var words,
       probabilities,

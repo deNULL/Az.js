@@ -1,7 +1,7 @@
 ;(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define(factory) :
-  global.Az.DAWG = factory()
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.DAWG = factory()) :
+  typeof define === 'function' && define.amd ? define('Az.DAWG', ['Az'], factory) :
+  (global.Az = globa.Az || {}) && (global.Az.DAWG = factory())
 }(this, function () { 'use strict';
   var ROOT = 0,
       MISSING = -1,
