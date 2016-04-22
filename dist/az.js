@@ -3,16 +3,38 @@
   typeof define === 'function' && define.amd ? define('Az', factory) :
   global.Az = factory()
 }(this, function () { 'use strict';
+  if (typeof require != 'undefined' && typeof exports === 'object' && typeof module !== 'undefined') {
+    var fs = require('fs');
+  }
 
   var Az = {
     load: function(url, responseType, callback) {
+      if (fs) {
+        fs.readFile(url, { encoding: responseType == 'json' ? 'utf8' : null }, function (err, data) {
+          if (err) {
+            callback(err);
+            return;
+          }
+
+          if (responseType == 'json') {
+            callback(null, JSON.parse(data));
+          } else
+          if (responseType == 'arraybuffer') {
+            callback(null, data.buffer);
+          } else {
+            callback(new Error('Unknown responseType'));
+          }
+        });
+        return;
+      }
+
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
       xhr.responseType = responseType;
 
       xhr.onload = function (e) {
         if (xhr.response) {
-          callback && callback(xhr.response);
+          callback && callback(null, xhr.response);
         }
       };
 
@@ -23,10 +45,10 @@
   return Az;
 }));
 ;(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.DAWG = factory()) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.DAWG = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.DAWG', ['Az'], factory) :
-  (global.Az = globa.Az || {}) && (global.Az.DAWG = factory())
-}(this, function () { 'use strict';
+  (global.Az = global.Az || {}) && (global.Az.DAWG = factory(global.Az))
+}(this, function (Az) { 'use strict';
   var ROOT = 0,
       MISSING = -1,
       PRECISION_MASK = 0xFFFFFFFF,
@@ -94,8 +116,8 @@
   }
 
   DAWG.load = function(url, format, callback) {
-    Az.load(url, 'arraybuffer', function(data) {
-      callback(DAWG.fromArrayBuffer(data, format));
+    Az.load(url, 'arraybuffer', function(err, data) {
+      callback(err, err ? null : DAWG.fromArrayBuffer(data, format));
     });
   }
 
@@ -339,10 +361,10 @@
   return DAWG;
 }));
 ;(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Morph = factory()) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Morph = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.Morph', ['Az', 'Az.DAWG'], factory) :
-  (global.Az = global.Az || {}) && (global.Az.Morph = factory())
-}(this, function () { 'use strict';
+  (global.Az = global.Az || {}) && (global.Az.Morph = factory(global.Az))
+}(this, function (Az) { 'use strict';
   var words,
       probabilities,
       predictionSuffixes = new Array(3),
@@ -581,12 +603,12 @@
           tags[i].ext = new Tag(tagsExt[i]);
         }
         tags = deepFreeze(tags);
-        callback(Morph);
+        callback && callback(null, Morph);
       }
     }
 
     loading++;
-    Az.DAWG.load(path + '/words.dawg', 'words', function(dawg) {
+    Az.DAWG.load(path + '/words.dawg', 'words', function(err, dawg) {
       words = dawg;
       loaded();
     });
@@ -594,7 +616,7 @@
     for (var prefix = 0; prefix < 3; prefix++) {
       (function(prefix) {
         loading++;
-        Az.DAWG.load(path + '/prediction-suffixes-' + prefix + '.dawg', 'probs', function(dawg) {
+        Az.DAWG.load(path + '/prediction-suffixes-' + prefix + '.dawg', 'probs', function(err, dawg) {
           predictionSuffixes[prefix] = dawg;
           loaded();
         });
@@ -602,13 +624,13 @@
     }
 
     loading++;
-    Az.DAWG.load(path + '/p_t_given_w.intdawg', 'int', function(dawg) {
+    Az.DAWG.load(path + '/p_t_given_w.intdawg', 'int', function(err, dawg) {
       probabilities = dawg;
       loaded();
     });
 
     loading++;
-    Az.load(path + '/grammemes.json', 'json', function(json) {
+    Az.load(path + '/grammemes.json', 'json', function(err, json) {
       grammemes = {};
       for (var i = 0; i < json.length; i++) {
         grammemes[json[i][0]] = grammemes[json[i][2]] = {
@@ -622,25 +644,25 @@
     });
 
     loading++;
-    Az.load(path + '/gramtab-opencorpora-int.json', 'json', function(json) {
+    Az.load(path + '/gramtab-opencorpora-int.json', 'json', function(err, json) {
       tagsInt = json;
       loaded();
     });
 
     loading++;
-    Az.load(path + '/gramtab-opencorpora-ext.json', 'json', function(json) {
+    Az.load(path + '/gramtab-opencorpora-ext.json', 'json', function(err, json) {
       tagsExt = json;
       loaded();
     });
 
     loading++;
-    Az.load(path + '/suffixes.json', 'json', function(json) {
+    Az.load(path + '/suffixes.json', 'json', function(err, json) {
       suffixes = json;
       loaded();
     });
 
     loading++;
-    Az.load(path + '/paradigms.array', 'arraybuffer', function(data) {
+    Az.load(path + '/paradigms.array', 'arraybuffer', function(err, data) {
       var list = new Uint16Array(data),
           count = list[0],
           pos = 1;
@@ -658,10 +680,10 @@
   return Morph;
 }));
 ;(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Syntax = factory()) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Syntax = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.Syntax', ['Az'], factory) :
-  (global.Az = global.Az || {}) && (global.Az.Syntax = factory())
-}(this, function () { 'use strict';
+  (global.Az = global.Az || {}) && (global.Az.Syntax = factory(global.Az))
+}(this, function (Az) { 'use strict';
   // TBD: Syntax analyzer
   var Syntax = function() {
 

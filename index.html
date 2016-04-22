@@ -34,7 +34,7 @@
       var el = document.getElementById('allForms' + variantId);
       el.style.display = (el.style.display == 'none') ? 'block' : 'none';
     }
-    Az.Morph.init('dicts', function(Morph) {
+    Az.Morph.init('dicts', function(err, Morph) {
       //Morph('слово');
       document.getElementById('word').addEventListener('keyup', function() {
         var variants = Az.Morph(this.value, { typos: 'auto' });
