@@ -18,7 +18,7 @@
     }
   };
   /* TODO: add more named HTML entities */
-  var HTML_ENTITIES = { nbsp: ' ', quot: '"', gt: '>', lt: '<', amp: '&' };
+  var HTML_ENTITIES = { nbsp: ' ', quot: '"', gt: '>', lt: '<', amp: '&', ndash: '–' };
 
   for (var i = 0; i < TLDs.length; i++) {
     defaults.links.tlds[TLDs[i]] = true;
@@ -33,7 +33,7 @@
       this.append(text);
       this.index = -1;
     } else {
-      return new Tokens(text);
+      return new Tokens(text, config);
     }
   }
 
@@ -42,6 +42,12 @@
     // TODO: get rid of 's' field (storing a copy of token)
     // st + len + en should be enough (check that they are always correct)
     config = config || this.config;
+    for (var k in defaults) {
+      if (!(k in config)) {
+        config[k] = defaults[k];
+      }
+    }
+
     for (var i = 0; i < text.length; i++) {
       var ch = text.charAt(i);
       var code = text.charCodeAt(i);
@@ -169,7 +175,7 @@
 
         // Process next char (start new token or append to the previous one)
         if (token.type == 'LINK') {
-          if (charType != 'SPACE' && ch != ',') {
+          if (charType != 'SPACE' && ch != ',' && ch != '<') {
             append = true;
           }
         } else
@@ -204,8 +210,15 @@
           if (ch == '"' || ch == '\'') {
             token.quote = ch;
           } else
-          if (ch == '<') {
-            append = false;
+          if (ch == '>') {
+            if (token.s.substr(-8) == '</script') {
+              token.s = token.s.substr(0, token.s.length - 8);
+
+              append = false;
+              ch = '</script>';
+              tokenType = 'TAG';
+              tokenSubType = 'CLOSING';
+            }
           }
         } else
         if (token.type == 'TAG' && ch != '<' && token.s.substr(1, 6).toLowerCase() == 'script') {
