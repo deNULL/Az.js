@@ -24,12 +24,11 @@
       text-overflow: ellipsis;
       vertical-align: middle;
       display: inline-block;
-      padding: 1px 4px;
+      padding: 1px 5px;
       border-radius: 2px;
-      margin: 3px;
+      margin: 2px;
       background: #ECECEC;
-      border-bottom: 1px solid #989898;
-      cursor: pointer;
+      cursor: default;
     }
     /* Simple tokens */
     .token-CYRIL {
@@ -174,10 +173,13 @@
       }
 
       html = tokens.done(incl, false).map(function(token, i) {
-        return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.s.split('\'').join('\\\'') + '\');">' + token.s.split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
+        if (token.type == 'WORD' && token.subType == 'CYRIL') {
+          return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.s.split('\'').join('\\\'') + '\');" style="cursor: pointer">' + token.s.split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
+        }
+        return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + token.s.split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
       });
 
-      document.getElementById('tokensResults').innerHTML = '<p>Токенизация выполнена за ' + (timeEn - timeSt) / 1000.0 + 'с</p>' + html.join('');
+      document.getElementById('tokensResults').innerHTML = '<p>Токенизация выполнена за ' + (timeEn - timeSt) / 1000.0 + 'с, всего ' + tokens.tokens.length + ' токенов</p>' + html.join('');
     }
     function morph(s) {
       document.getElementById('word').value = s.toLocaleLowerCase();
