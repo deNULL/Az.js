@@ -9,6 +9,7 @@
   <![endif]-->
   <!--[if gt IE 8]><!-->
       <link rel="stylesheet" href="http://yui.yahooapis.com/pure/0.6.0/grids-responsive-min.css">
+      <link href='https://fonts.googleapis.com/css?family=Open+Sans&subset=latin,cyrillic,cyrillic-ext,latin-ext' rel='stylesheet' type='text/css'>
   <!--<![endif]-->
   <!--script src="dist/az.min.js"></script-->
   <script src="src/az.js"></script>
@@ -16,6 +17,10 @@
   <script src="src/az.morph.js"></script>
   <script src="src/az.tokens.js"></script>
   <style>
+    body {
+      font-family: 'Open Sans', sans-serif;
+      font-size: 13px;
+    }
     .token {
       height: 18px;
       max-width: 160px;
@@ -31,7 +36,7 @@
       cursor: default;
     }
     /* Simple tokens */
-    .token-CYRIL {
+    .token-CYRIL, .token-WORD {
       background: #FFBFBF;
     }
     .token-LATIN, .token-MIXED {
@@ -81,7 +86,7 @@
   <form class="pure-form pure-form-stacked">
     <div class="pure-control-group">
       <label for="text">Текст для токенизации</label>
-      <textarea id="text" class="pure-input-1" placeholder="Текст для разбора">Текст (от лат. textus — «ткань; сплетение, связь, паутина, сочетание») — зафиксированная на каком-либо материальном носителе человеческая мысль; в общем плане связная и полная последовательность символов.
+      <textarea id="text" class="pure-input-1" style="height: 170px;" placeholder="Текст для разбора">Текст (от лат. textus — «ткань; сплетение, связь, паутина, сочетание») — зафиксированная на каком-либо материальном носителе человеческая мысль; в общем плане связная и полная последовательность символов.
 
 Существуют две основные трактовки понятия «текст»: «имманентная» (расширенная, философски нагруженная) и «репрезентативная» (более частная). Имманентный подход подразумевает отношение к тексту как к автономной реальности, нацеленность на выявление его внутренней структуры. Репрезентативный — рассмотрение текста как особой формы представления знаний о внешней тексту действительности.
 
@@ -90,6 +95,7 @@
     <h3>Легенда</h3>
     <div id="tokensLegend">
     </div>
+    <p>MARKUP – элементы разметки, использующиеся в Markdown и вики-разметке. TAG и CONTENT – элементы HTML (CONTENT используется для содержимого тегов <b>script</b> и <b>style</b>, чтобы они не разваливались в кучу мусорных токенов).
     <h3>Результат токенизации</h3>
     <div id="tokensResults">
     </div>
@@ -155,7 +161,7 @@
     }
 
 
-    var types = ['SPACE', 'CYRIL', 'LATIN', 'NUMBER', 'PUNCT', 'LINK', 'EMAIL', 'HASHTAG', 'MARKUP', 'TAG', 'CONTENT', 'OTHER'];
+    var types = ['SPACE', 'WORD', 'NUMBER', 'PUNCT', 'LINK', 'EMAIL', 'HASHTAG', 'MARKUP', 'TAG', 'CONTENT', 'OTHER'];
     var html = types.map(function(type) {
       return '<span style="white-space: nowrap"><input id="filter-' + type + '" type="checkbox" checked onchange="update()" style="margin-left: 10px"/><span class="token token-' + type + '" style="cursor: default">' + type + '</span></span>';
     });
