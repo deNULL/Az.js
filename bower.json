@@ -8,10 +8,8 @@
   "main": "dist/az.min.js",
   "moduleType": [
     "amd",
-    "es6",
     "globals",
-    "node",
-    "yui"
+    "node"
   ],
   "keywords": [
     "NLP",

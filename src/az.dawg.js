@@ -1,4 +1,8 @@
-(function() {
+;(function (global, factory) {
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.DAWG = factory(module.exports)) :
+  typeof define === 'function' && define.amd ? define('Az.DAWG', ['Az'], factory) :
+  (global.Az = global.Az || {}) && (global.Az.DAWG = factory(global.Az))
+}(this, function (Az) { 'use strict';
   var ROOT = 0,
       MISSING = -1,
       PRECISION_MASK = 0xFFFFFFFF,
@@ -49,7 +53,7 @@
     return base & ~IS_LEAF_BIT & PRECISION_MASK;
   }
 
-  var DAWG = Az.DAWG = function(units, guide, format) {
+  var DAWG = function(units, guide, format) {
     this.units = units;
     this.guide = guide;
     this.format = format;
@@ -66,8 +70,8 @@
   }
 
   DAWG.load = function(url, format, callback) {
-    Az.load(url, 'arraybuffer', function(data) {
-      callback(DAWG.fromArrayBuffer(data, format));
+    Az.load(url, 'arraybuffer', function(err, data) {
+      callback(err, err ? null : DAWG.fromArrayBuffer(data, format));
     });
   }
 
@@ -307,4 +311,6 @@
     }
     return results;
   }
-})();
+
+  return DAWG;
+}));
