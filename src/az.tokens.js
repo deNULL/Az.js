@@ -13,7 +13,7 @@
     emails: true,
     links: {
       protocols: true,
-      www: true,
+      www: false,
       tlds: {}
     }
   };
@@ -46,6 +46,9 @@
       if (!(k in config)) {
         config[k] = defaults[k];
       }
+    }
+    if (config.links && config.links.tlds === true) {
+      config.links.tlds = defaults.links.tlds;
     }
 
     for (var i = 0; i < text.length; i++) {

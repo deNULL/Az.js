@@ -45,25 +45,22 @@ describe('Az.Tokens', function() {
   });
 
   it('should parse links correctly', function () {
-    var result = Az.Tokens('http://site,vk.com,www.anything,сайт.рф .ru com.').done();
+    var result = Az.Tokens('http://site,vk.com,сайт.рф .ru com.').done();
     expect(result).to.be.an('array');
-    expect(result).to.have.length(14);
+    expect(result).to.have.length(11);
     expect(result[0].type).to.equal('LINK');
     expect(result[1].type).to.equal('PUNCT');
     expect(result[2].type).to.equal('LINK');
     expect(result[3].type).to.equal('PUNCT');
     expect(result[4].type).to.equal('LINK');
-    expect(result[5].type).to.equal('PUNCT');
-    expect(result[6].type).to.equal('LINK');
-    expect(result[7].type).to.equal('PUNCT');
+    expect(result[5].type).to.equal('SPACE');
+    expect(result[6].type).to.equal('PUNCT');
+    expect(result[7].type).to.equal('WORD');
+    expect(result[7].subType).to.equal('LATIN');
     expect(result[8].type).to.equal('SPACE');
-    expect(result[9].type).to.equal('PUNCT');
-    expect(result[10].type).to.equal('WORD');
-    expect(result[10].subType).to.equal('LATIN');
-    expect(result[11].type).to.equal('SPACE');
-    expect(result[12].type).to.equal('WORD');
-    expect(result[12].subType).to.equal('LATIN');
-    expect(result[13].type).to.equal('PUNCT');
+    expect(result[9].type).to.equal('WORD');
+    expect(result[9].subType).to.equal('LATIN');
+    expect(result[10].type).to.equal('PUNCT');
   });
 
   it('should parse hashtags correctly', function () {
