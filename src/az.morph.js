@@ -15,6 +15,7 @@
         // false означает, что регистр слова следует принимать во внимание
         // (в основном это означает запрет написания имен собственных и инициалов с маленькой буквы)
         ignoreCase: false,
+
         // Замены (работают как в pymorphy2).
         // false, чтобы отключить.
         replacements: { 'е': 'ё' },
@@ -33,11 +34,50 @@
         // - 0, если слово короче 5 букв
         // - 1, если слово короче 10 букв (но только если не нашлось варианта разбора без опечаток)
         // - 2 в противном случае (но только если не нашлось варианта разбора без опечаток или с 1 опечаткой)
-        typos: 0
+        typos: 0,
         // Совместное появление опечаток и "заикания" считается недопустимым (т.к. это приводит к большому числу вариантов, особенно на словах с "заиканием")
+  
+        // Список применяемых парсеров (см. поля объекта Az.Morph.Parsers) в порядке применения (т.е. стоящие в начале имеют наивысший приоритет)
+        // (парсер в терминологии pymorphy2 - анализатор)
+        // Вопросительный знак означает, что данный парсер не терминальный, то есть варианты собираются до первого терминального парсера. 
+        // Иными словами, если мы дошли до какого-то парсера, значит все стоящие перед ним терминальные парсеры либо не дали результата совсем, либо дали только с опечатками.
+        parsers: [
+          // Словарные слова + инициалы
+          'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
+          // Числа, пунктуация, латиница (по-хорошему, токенизатор не должен эту ерунду сюда пускать)
+          'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
+          // Слова с дефисами
+          'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
+          // Предсказатели по префиксам/суффиксам
+          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown', 'Unknown'
+        ]
       },
       initials = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ',
       particles = ['-то', '-ка', '-таки', '-де', '-тко', '-тка', '-с', '-ста'],
+      knownPrefixes = [
+        'авиа', 'авто', 'аква', 'анти', 'анти-', 'антропо', 'архи', 'арт', 'арт-', 'астро', 'аудио', 'аэро',
+        'без', 'бес', 'био',
+        'вело', 'взаимо', 'вне', 'внутри', 'видео', 'вице-', 'вперед', 'впереди',
+        'гекто', 'гелио', 'гео', 'гетеро', 'гига', 'гигро', 'гипер', 'гипо', 'гомо',
+        'дву', 'двух', 'де', 'дез', 'дека', 'деци', 'дис', 'до',
+        'евро',
+        'за', 'зоо',
+        'интер', 'инфра',
+        'квази', 'квази-', 'кило', 'кино', 'контр', 'контр-', 'космо', 'космо-', 'крипто',
+        'лейб-', 'лже', 'лже-',
+        'макро', 'макси', 'макси-', 'мало', 'меж', 'медиа', 'медиа-', 'мега', 'мета', 'мета-', 'метео', 'метро', 'микро',
+        'милли', 'мини', 'мини-', 'моно', 'мото', 'много', 'мульти',
+        'нано', 'нарко', 'не', 'небез', 'недо', 'нейро', 'нео', 'низко',
+        'обер-', 'обще', 'одно', 'около', 'орто',
+        'палео', 'пан', 'пара', 'пента', 'пере', 'пиро', 'поли', 'полу', 'после', 'пост', 'пост-',
+        'порно', 'пра', 'пра-', 'пред', 'пресс-', 'противо', 'противо-', 'прото', 'псевдо', 'псевдо-',
+        'радио', 'разно', 'ре', 'ретро', 'ретро-',
+        'само', 'санти', 'сверх', 'сверх-', 'спец', 'суб', 'супер', 'супер-', 'супра',
+        'теле', 'тетра', 'топ-', 'транс', 'транс-',
+        'ультра', 'унтер-',
+        'штаб-',
+        'экзо', 'эко', 'эндо', 'эконом-', 'экс', 'экс-', 'экстра', 'экстра-', 'электро', 'энерго', 'этно'
+      ],
       __init = [];
 
   // Взято из https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
@@ -58,7 +98,7 @@
   }
 
   //
-  // Экземпляры Tag могут быть довольно большими, т.к. будут переиспользоваться для всех слов.
+  // Экземплярам Tag дозволено быть довольно большими, т.к. они будут переиспользоваться для всех слов.
   // Однако это приводит к запрету на любые изменения этих экземпляров. В современных браузерах для этого будет использован метод Object.freeze()
   // Каждая граммема хранится внутри тега в нескольких местах:
   //   tag[grammeme] = true | false
@@ -96,14 +136,19 @@
       this.POS = this.POST;
     }
   }
+
   Tag.prototype.toString = function() {
     return (this.stat.join(',') + ' ' + this.flex.join(',')).trim();
   }
+
   // Проверяет согласованность с конкретными значениями граммем либо со списком граммем из другого тега (или слова)
   // tag.matches({ 'POS' : 'NOUN', 'GNdr': ['masc', 'neut'] })
   //   Ключи — названия граммем, значения — дочерние граммемы, массивы граммем, либо true/false
+  // tag.matches([ 'NOUN', 'masc' ])
+  //   Массив значений граммем, которые должны присутствовать у тега (т.е. аналог выражения tag.NOUN && tag.masc)
   // tag.matches(otherTag, ['POS', 'GNdr'])
   //   Тег (или слово) + список граммем, значения которых у этих двух тегов должны совпадать
+  // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
   Tag.prototype.matches = function(tag, grammemes) {
     if (!grammemes) {
       if (Object.prototype.toString.call(tag) === '[object Array]') {
@@ -129,7 +174,7 @@
       return true;
     }
 
-    if (tag instanceof Word) {
+    if (tag instanceof Entry) {
       tag = tag.tag;
     }
 
@@ -151,19 +196,7 @@
       }
     }
 
-    // FIXME: убрать в дефолтный конфиг
-    config.parsers = [
-      // Словарные слова + инициалы
-      'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
-      // Числа, пунктуация, латиница (по-хорошему, токенизатор уже должен эту ерунду сюда не пускать)
-      'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
-      // Слова с дефисами
-      'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
-      // Предсказатели по префиксам/суффиксам
-      'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown', 'Unknown'
-    ];
-
-    var all = [];
+    var entries = [];
     var matched = false;
     for (var i = 0; i < config.parsers.length; i++) {
       var name = config.parsers[i];
@@ -177,7 +210,7 @@
           }
         }
 
-        all = all.concat(vars);
+        entries = entries.concat(vars);
         if (matched && terminal) {
           break;
         }
@@ -186,57 +219,95 @@
       }
     }
 
-    return all;
+    var total = 0;
+    var probs = [];
+    var useProbs = false;
+    for (var i = 0; i < entries.length; i++) {
+      var res = probabilities.findAll(entries[i] + ':' + entries[i].tag);
+      if (res && res[0]) {
+        probs.push(res[0][1] / 1000000);
+        useProbs = true;
+      } else {
+        probs.push(0);
+      }
+      total += entries[i].score;
+    }
+
+    if (useProbs) {
+      for (var i = 0; i < entries.length; i++) {
+        entries[i].score = probs[i];
+      }
+    } else
+    if (total > 0) {
+      for (var i = 0; i < entries.length; i++) {
+        entries[i].score /= total;
+      }
+    }
+
+    entries.sort(function(e1, e2) {
+      return e2.score - e1.score;
+    });
+
+    return entries;
   }
 
   // TODO: вынести парсеры в отдельный файл(ы)?
 
   Morph.Parsers = {}
 
-  var Word = function(val, tag, stutterCnt, typosCnt) {
-    this.val = val;
+  var Entry = function(word, tag, score, stutterCnt, typosCnt) {
+    this.word = word;
     this.tag = tag;
     this.stutterCnt = stutterCnt || 0;
     this.typosCnt = typosCnt || 0;
+    this.score = score || 0;
   }
 
   // Приводит к начальной форме. Аргумент keepPOS=true нужен, если требуется не менять часть речи при нормализации (например, не делать из причастия инфинитив).
   // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
-  Word.prototype.normalize = function(keepPOS) {
+  Entry.prototype.normalize = function(keepPOS) {
     return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
   }
 
-  Word.prototype.inflect = function() {
-    return [this.val, this.tag];
+  Entry.prototype.inflect = function() {
+    return [this.word, this.tag];
   }
 
   // Аналогично Tag.prototype.matches.
-  Word.prototype.matches = function(tag, grammemes) {
+  Entry.prototype.matches = function(tag, grammemes) {
     return this.tag.matches(tag, grammemes);
   }
 
-  Word.prototype.toString = function() {
-    return this.val;
+  Entry.prototype.toString = function() {
+    return this.word;
   }
 
   function lookupWord(word, config) {
-    var opts;
+    var results;
     if (config.typos == 'auto') {
-      opts = words.findAll(word, config.replacements, config.stutter, 0);
-      if (!opts.length && word.length > 4) {
-        opts = words.findAll(word, config.replacements, config.stutter, 1);
-        if (!opts.length && word.length > 9) {
-          opts = words.findAll(word, config.replacements, config.stutter, 2);
+      results = words.findAll(word, config.replacements, config.stutter, 0);
+      if (!results.length && word.length > 4) {
+        results = words.findAll(word, config.replacements, config.stutter, 1);
+        if (!results.length && word.length > 9) {
+          results = words.findAll(word, config.replacements, config.stutter, 2);
         }
       }
     } else {
-      opts = words.findAll(word, config.replacements, config.stutter, config.typos);
+      results = words.findAll(word, config.replacements, config.stutter, config.typos);
     }
-    return opts;
+    return results;
   }
 
-  var DictionaryWord = function(val, paradigmIdx, formIdx, stutterCnt, typosCnt) {
-    this.val = val;
+  function getDictionaryScore(stutterCnt, typosCnt) {
+    // = 1.0 if no stutter/typos
+    // = 0.5 if any number of stutter or 1 typo
+    // = 0.25 if 2 typos
+    // = 0.125 if 3 typos
+    return Math.pow(0.5, Math.min(stutterCnt, 1) + typosCnt);
+  }
+
+  var DictionaryEntry = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt) {
+    this.word = word;
     this.paradigmIdx = paradigmIdx;
     this.paradigm = paradigms[paradigmIdx];
     var len = this.paradigm.length / 3;
@@ -244,27 +315,28 @@
     this.tag = tags[this.paradigm[len + formIdx]];
     this.stutterCnt = stutterCnt || 0;
     this.typosCnt = typosCnt || 0;
+    this.score = getDictionaryScore(stutterCnt, typosCnt);
     this.suffix = '';
   }
 
-  DictionaryWord.prototype = Object.create(Word.prototype);
-  DictionaryWord.prototype.constructor = DictionaryWord;
+  DictionaryEntry.prototype = Object.create(Entry.prototype);
+  DictionaryEntry.prototype.constructor = DictionaryEntry;
 
   // Возвращает основу слова
-  DictionaryWord.prototype.base = function() {
+  DictionaryEntry.prototype.base = function() {
     if (this._base) {
       return this._base;
     }
     var len = this.paradigm.length / 3;
-    return (this._base = this.val.substring(
+    return (this._base = this.word.substring(
       prefixes[this.paradigm[(len << 1) + this.formIdx]].length,
-      this.val.length - suffixes[this.paradigm[this.formIdx]].length)
+      this.word.length - suffixes[this.paradigm[this.formIdx]].length)
     );
   }
 
   // Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
   // Всегда выбирается первый подходящий вариант.
-  DictionaryWord.prototype.inflect = function(tag, grammemes) {
+  DictionaryEntry.prototype.inflect = function(tag, grammemes) {
     var len = this.paradigm.length / 3;
     if (!grammemes && typeof tag === 'number') {
       // Inflect to specific formIdx
@@ -293,9 +365,9 @@
   }
 
   // Выводит информацию о слове в консоль.
-  DictionaryWord.prototype.log = function() {
+  DictionaryEntry.prototype.log = function() {
     var len = this.paradigm.length / 3;
-    console.group(this.val + this.suffix);
+    console.group(this.word + this.suffix);
     console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
     console.log(prefixes[this.paradigm[(len << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
     console.log(this.tag.ext.toString());
@@ -311,8 +383,8 @@
     console.groupEnd();
     console.groupEnd();
   }
-  DictionaryWord.prototype.toString = function() {
-    return this.val + this.suffix;
+  DictionaryEntry.prototype.toString = function() {
+    return this.word + this.suffix;
   }
 
   __init.push(function() {
@@ -322,18 +394,21 @@
       var opts = lookupWord(word, config);
 
       var vars = [];
-      //console.log(opts);
       for (var i = 0; i < opts.length; i++) {
         for (var j = 0; j < opts[i][1].length; j++) {
-          var w = new DictionaryWord(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
-          //word.log();
+          var w = new DictionaryEntry(
+            opts[i][0], 
+            opts[i][1][j][0], 
+            opts[i][1][j][1], 
+            opts[i][2], 
+            opts[i][3]);
           vars.push(w);
         }
       }
       return vars;
     }
 
-    var InitialsParser = function(isPatronymic) {
+    var InitialsParser = function(isPatronymic, score) {
       var possibleTags = [];
       for (var i = 0; i < 1; i++) {
         for (var j = 0; j < 6; j++) {
@@ -355,17 +430,17 @@
         }
         var vars = [];
         for (var i = 0; i < possibleTags.length; i++) {
-          var w = new Word(word, possibleTags[i]);
+          var w = new Entry(word, possibleTags[i], score);
           vars.push(w);
         }
         return vars;
       }
     }
 
-    Morph.Parsers.AbbrName = InitialsParser(false);
-    Morph.Parsers.AbbrPatronymic = InitialsParser(true);
+    Morph.Parsers.AbbrName = InitialsParser(false, 0.1);
+    Morph.Parsers.AbbrPatronymic = InitialsParser(true, 0.1);
 
-    var RegexpParser = function(regexp, tagInt, tagExt) {
+    var RegexpParser = function(regexp, tagInt, tagExt, score) {
       var tag = new Tag(tagInt);
       tag.ext = new Tag(tagExt);
       tag = deepFreeze(tag);
@@ -374,7 +449,7 @@
           word = word.toLocaleUpperCase();
         }
         if (word.length && word.match(regexp)) {
-          return [new Word(word, tag)];
+          return [new Entry(word, tag)];
         } else {
           return [];
         }
@@ -390,24 +465,26 @@
 
     Morph.Parsers.IntNumber = RegexpParser(
       /^[−-]?[0-9]+$/,
-      'NUMB,intg', 'ЧИСЛО,цел');
+      'NUMB,intg', 'ЧИСЛО,цел', 0.9);
 
     Morph.Parsers.RealNumber = RegexpParser(
       /^[−-]?([0-9]*[.,][0-9]+)$/,
-      'NUMB,real', 'ЧИСЛО,вещ');
+      'NUMB,real', 'ЧИСЛО,вещ', 0.9);
 
     Morph.Parsers.Punctuation = RegexpParser(
       /^[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^_`{|}~]+$/,
-      'PNCT', 'ЗПР');
+      'PNCT', 'ЗПР', 0.9);
 
     Morph.Parsers.RomanNumber = RegexpParser(
       /^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/,
-      'ROMN', 'РИМ');
+      'ROMN', 'РИМ', 0.9);
 
     Morph.Parsers.Latin = RegexpParser(
       /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]/,
-      'LATN', 'ЛАТ');
+      'LATN', 'ЛАТ', 0.9);
 
+    // слово + частица
+    // смотри-ка
     Morph.Parsers.HyphenParticle = function(word, config) {
       word = word.toLocaleLowerCase();
 
@@ -420,12 +497,13 @@
           //console.log(opts);
           for (var i = 0; i < opts.length; i++) {
             for (var j = 0; j < opts[i][1].length; j++) {
-              var w = new DictionaryWord(
+              var w = new DictionaryEntry(
                 opts[i][0], 
                 opts[i][1][j][0], 
-                opts[i][1][j][1], 
+                opts[i][1][j][1],
                 opts[i][2], 
                 opts[i][3]);
+              w.score *= 0.9;
               w.suffix = particles[k];
               vars.push(w);
             }
@@ -440,6 +518,8 @@
     ADVB.ext = new Tag('Н');
     ADVB = deepFreeze(ADVB);
 
+    // 'по-' + прилагательное в дательном падеже
+    // по-западному
     Morph.Parsers.HyphenAdverb = function(word, config) {
       word = word.toLocaleLowerCase();
 
@@ -455,11 +535,11 @@
       for (var i = 0; i < opts.length; i++) {
         if (!used[opts[i][0]]) {
           for (var j = 0; j < opts[i][1].length; j++) {
-            var w = new DictionaryWord(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+            var w = new DictionaryEntry(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
             if (w.matches(['ADJF', 'sing', 'datv'])) {
               used[opts[i][0]] = true;
 
-              w = new Word(word, ADVB, opts[i][2], opts[i][3]);
+              w = new Entry(word, ADVB, w.score * 0.7, opts[i][2], opts[i][3]);
               vars.push(w);
               break;
             }
@@ -472,11 +552,15 @@
     var UNKN = new Tag('UNKN');
     UNKN.ext = new Tag('НЕИЗВ');
 
+    // слово + '-' + слово
+    // интернет-магазин
+    // компания-производитель
     Morph.Parsers.HyphenWords = function(word, config) {
       // TODO
       return [];
     }
 
+    
     Morph.Parsers.PrefixKnown = function(word, config) {
       // TODO
       return [];
@@ -493,8 +577,7 @@
     }
 
     Morph.Parsers.Unknown = function(word, config) {
-      var w = new Word(word.toLocaleLowerCase(), UNKN, 0, 0);
-      return [w];
+      return [new Entry(word.toLocaleLowerCase(), UNKN)];
     }
   });
   
