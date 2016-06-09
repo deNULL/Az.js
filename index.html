@@ -128,27 +128,29 @@
       var html = [];
       for (var i = 0; i < variants.length; i++) {
         html.push('<div class="pure-u-1 pure-u-md-1-3">' +
-          '<h3>' + variants[i].val + '</h3>' +
+          '<h3>' + variants[i] + '</h3>' +
           '<div class="pure-g">' +
-            '<div class="pure-u-1 pure-u-md-1-2">Граммемы<br/><small>по-русски</small></div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + variants[i].tag.ext.toString() + '</div>' +
-            '<div class="pure-u-1 pure-u-md-1-2">Граммемы<br/><small>внутренний формат</small></div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + variants[i].tag.toString() + '</div>' +
-            '<div class="pure-u-1 pure-u-md-1-2">Начальная форма</div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + variants[i].normalize()[0] + '</div>' +
-            '<div class="pure-u-1 pure-u-md-1-2">Начальная форма<br/><small>(та же часть речи)</small></div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + variants[i].normalize(true)[0] + '</div>' +
-            '<div class="pure-u-1 pure-u-md-1-2">Устранено повторов букв</div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + variants[i].stutterCnt + '</div>' +
-            '<div class="pure-u-1 pure-u-md-1-2">Устранено опечаток</div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + variants[i].typosCnt + '</div>' +
+            '<div class="pure-u-1-2">Граммемы<br/><small>по-русски</small></div>' +
+              '<div class="pure-u-1-2">' + variants[i].tag.ext.toString() + '</div>' +
+            '<div class="pure-u-1-2">Граммемы<br/><small>внутренний формат</small></div>' +
+              '<div class="pure-u-1-2">' + variants[i].tag.toString() + '</div>' +
+            '<div class="pure-u-1-2">Начальная форма</div>' +
+              '<div class="pure-u-1-2">' + variants[i].normalize()[0] + '</div>' +
+            '<div class="pure-u-1-2">Начальная форма<br/><small>(та же часть речи)</small></div>' +
+              '<div class="pure-u-1-2">' + variants[i].normalize(true)[0] + '</div>' +
+            '<div class="pure-u-1-2">Устранено повторов букв</div>' +
+              '<div class="pure-u-1-2">' + (variants[i].stutterCnt || 0) + '</div>' +
+            '<div class="pure-u-1-2">Устранено опечаток</div>' +
+              '<div class="pure-u-1-2">' + (variants[i].typosCnt || 0) + '</div>' +
             '<div class="pure-u-1"><a href="#" onclick="showAll(' + i + '); return false;">Показать все формы</a></div>' +
               '<div id="allForms' + i + '" style="display: none">');
-        for (var formIdx = 0; formIdx < variants[i].paradigm.length / 3; formIdx++) {
-          var form = variants[i].inflect(formIdx);
-          html.push(
-            '<div class="pure-u-1 pure-u-md-1-2"><strong>' + form[0] + '</strong></div>' +
-              '<div class="pure-u-1 pure-u-md-1-2">' + form[1].ext.toString() + '</div>');
+        if (variants[i].paradigm) {
+          for (var formIdx = 0; formIdx < variants[i].paradigm.length / 3; formIdx++) {
+            var form = variants[i].inflect(formIdx);
+            html.push(
+              '<div class="pure-u-1 pure-u-md-1-2"><strong>' + form[0] + '</strong></div>' +
+                '<div class="pure-u-1 pure-u-md-1-2">' + form[1].ext.toString() + '</div>');
+          }
         }
         html.push('</div>' +
           '</div>' +
@@ -185,10 +187,10 @@
         return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + token.s.split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
       });
 
-      document.getElementById('tokensResults').innerHTML = '<p>Токенизация выполнена за ' + (timeEn - timeSt) / 1000.0 + 'с, всего ' + tokens.tokens.length + ' токенов</p>' + html.join('');
+      document.getElementById('tokensResults').innerHTML = '<p>Токенизация выполнена за ' + (timeEn - timeSt) + 'мс, всего ' + tokens.tokens.length + ' токенов</p>' + html.join('');
     }
     function morph(s) {
-      document.getElementById('word').value = s.toLocaleLowerCase();
+      document.getElementById('word').value = s;
       updateMorph();
     }
     function tokenize() {

@@ -12,6 +12,9 @@
       paradigms,
       tags,
       defaults = {
+        // false означает, что регистр слова следует принимать во внимание
+        // (в основном это означает запрет написания имен собственных и инициалов с маленькой буквы)
+        ignoreCase: false,
         // Замены (работают как в pymorphy2).
         // false, чтобы отключить.
         replacements: { 'е': 'ё' },
@@ -32,7 +35,10 @@
         // - 2 в противном случае (но только если не нашлось варианта разбора без опечаток или с 1 опечаткой)
         typos: 0
         // Совместное появление опечаток и "заикания" считается недопустимым (т.к. это приводит к большому числу вариантов, особенно на словах с "заиканием")
-      };
+      },
+      initials = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ',
+      particles = ['-то', '-ка', '-таки', '-де', '-тко', '-тка', '-с', '-ста'],
+      __init = [];
 
   // Взято из https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
   function deepFreeze(obj) {
@@ -75,14 +81,14 @@
     this.stat = pair[0].split(',');
     for (var i = 0; i < this.stat.length; i++) {
       this[this.stat[i]] = true;
-      if (par = grammemes[this.stat[i]].parent) {
+      if (grammemes[this.stat[i]] && (par = grammemes[this.stat[i]].parent)) {
         this[par] = this.stat[i];
       }
     }
     this.flex = pair[1] ? pair[1].split(',') : [];
     for (var i = 0; i < this.flex.length; i++) {
       this[this.flex[i]] = true;
-      if (par = grammemes[this.flex[i]].parent) {
+      if (grammemes[this.flex[i]] && (par = grammemes[this.flex[i]].parent)) {
         this[par] = this.flex[i];
       }
     }
@@ -100,6 +106,14 @@
   //   Тег (или слово) + список граммем, значения которых у этих двух тегов должны совпадать
   Tag.prototype.matches = function(tag, grammemes) {
     if (!grammemes) {
+      if (Object.prototype.toString.call(tag) === '[object Array]') {
+        for (var i = 0; i < tag.length; i++) {
+          if (!this[tag[i]]) {
+            return false;
+          }
+        }
+        return true;
+      } else
       // Match to map
       for (var k in tag) {
         if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
@@ -128,54 +142,160 @@
     return true;
   }
 
-  var Word = function(val, paradigmIdx, formIdx, stutterCnt, typosCnt) {
+  var Morph = function(word, config) {
+    config = config || defaults;
+
+    for (var k in defaults) {
+      if (!(k in config)) {
+        config[k] = defaults[k];
+      }
+    }
+
+    // FIXME: убрать в дефолтный конфиг
+    config.parsers = [
+      // Словарные слова + инициалы
+      'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
+      // Числа, пунктуация, латиница (по-хорошему, токенизатор уже должен эту ерунду сюда не пускать)
+      'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
+      // Слова с дефисами
+      'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
+      // Предсказатели по префиксам/суффиксам
+      'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown', 'Unknown'
+    ];
+
+    var all = [];
+    var matched = false;
+    for (var i = 0; i < config.parsers.length; i++) {
+      var name = config.parsers[i];
+      var terminal = name[name.length - 1] != '?';
+      name = terminal ? name : name.slice(0, -1);
+      if (name in Morph.Parsers) {
+        var vars = Morph.Parsers[name](word, config);
+        for (var j = 0; j < vars.length; j++) {
+          if (!vars[j].stutterCnt && !vars[j].typosCnt) {
+            matched = true;
+          }
+        }
+
+        all = all.concat(vars);
+        if (matched && terminal) {
+          break;
+        }
+      } else {
+        console.warn('Parser "' + name + '" is not found. Skipping');
+      }
+    }
+
+    return all;
+  }
+
+  // TODO: вынести парсеры в отдельный файл(ы)?
+
+  Morph.Parsers = {}
+
+  var Word = function(val, tag, stutterCnt, typosCnt) {
+    this.val = val;
+    this.tag = tag;
+    this.stutterCnt = stutterCnt || 0;
+    this.typosCnt = typosCnt || 0;
+  }
+
+  // Приводит к начальной форме. Аргумент keepPOS=true нужен, если требуется не менять часть речи при нормализации (например, не делать из причастия инфинитив).
+  // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
+  Word.prototype.normalize = function(keepPOS) {
+    return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
+  }
+
+  Word.prototype.inflect = function() {
+    return [this.val, this.tag];
+  }
+
+  // Аналогично Tag.prototype.matches.
+  Word.prototype.matches = function(tag, grammemes) {
+    return this.tag.matches(tag, grammemes);
+  }
+
+  Word.prototype.toString = function() {
+    return this.val;
+  }
+
+  function lookupWord(word, config) {
+    var opts;
+    if (config.typos == 'auto') {
+      opts = words.findAll(word, config.replacements, config.stutter, 0);
+      if (!opts.length && word.length > 4) {
+        opts = words.findAll(word, config.replacements, config.stutter, 1);
+        if (!opts.length && word.length > 9) {
+          opts = words.findAll(word, config.replacements, config.stutter, 2);
+        }
+      }
+    } else {
+      opts = words.findAll(word, config.replacements, config.stutter, config.typos);
+    }
+    return opts;
+  }
+
+  var DictionaryWord = function(val, paradigmIdx, formIdx, stutterCnt, typosCnt) {
     this.val = val;
     this.paradigmIdx = paradigmIdx;
     this.paradigm = paradigms[paradigmIdx];
     var len = this.paradigm.length / 3;
     this.formIdx = formIdx;
     this.tag = tags[this.paradigm[len + formIdx]];
-    this.stutterCnt = stutterCnt;
-    this.typosCnt = typosCnt;
+    this.stutterCnt = stutterCnt || 0;
+    this.typosCnt = typosCnt || 0;
+    this.suffix = '';
   }
+
+  DictionaryWord.prototype = Object.create(Word.prototype);
+  DictionaryWord.prototype.constructor = DictionaryWord;
+
   // Возвращает основу слова
-  Word.prototype.base = function() {
+  DictionaryWord.prototype.base = function() {
     if (this._base) {
       return this._base;
     }
     var len = this.paradigm.length / 3;
-    return this._base = this.val.substring(prefixes[this.paradigm[(len << 1) + this.formIdx]].length, this.val.length - suffixes[this.paradigm[this.formIdx]].length);
+    return (this._base = this.val.substring(
+      prefixes[this.paradigm[(len << 1) + this.formIdx]].length,
+      this.val.length - suffixes[this.paradigm[this.formIdx]].length)
+    );
   }
-  // Приводит к начальной форме. Аргумент keepPOS=true нужен, если требуется не менять часть речи при нормализации (например, не делать из причастия инфинитив).
-  // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
-  Word.prototype.normalize = function(keepPOS) {
-    return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
-  }
+
   // Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
   // Всегда выбирается первый подходящий вариант.
-  Word.prototype.inflect = function(tag, grammemes) {
+  DictionaryWord.prototype.inflect = function(tag, grammemes) {
     var len = this.paradigm.length / 3;
     if (!grammemes && typeof tag === 'number') {
       // Inflect to specific formIdx
-      return [prefixes[this.paradigm[(len << 1) + tag]] + this.base() + suffixes[this.paradigm[tag]], tags[this.paradigm[len + tag]]];
+      return [
+          prefixes[this.paradigm[(len << 1) + tag]] + 
+          this.base() + 
+          suffixes[this.paradigm[tag]] +
+          this.suffix,
+        tags[this.paradigm[len + tag]]
+      ];
     }
 
     for (var formIdx = 0; formIdx < len; formIdx++) {
       if (tags[this.paradigm[len + formIdx]].matches(tag, grammemes)) {
-        return [prefixes[this.paradigm[(len << 1) + formIdx]] + this.base() + suffixes[this.paradigm[formIdx]], tags[this.paradigm[len + formIdx]]];
+        return [
+            prefixes[this.paradigm[(len << 1) + formIdx]] + 
+            this.base() + 
+            suffixes[this.paradigm[formIdx]] + 
+            this.suffix,
+          tags[this.paradigm[len + formIdx]]
+        ];
       }
     }
 
     return false;
   }
-  // Аналогично Tag.prototype.matches.
-  Word.prototype.matches = function(tag, grammemes) {
-    return this.tag.matches(tag, grammemes);
-  }
+
   // Выводит информацию о слове в консоль.
-  Word.prototype.log = function() {
+  DictionaryWord.prototype.log = function() {
     var len = this.paradigm.length / 3;
-    console.group(this.val);
+    console.group(this.val + this.suffix);
     console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
     console.log(prefixes[this.paradigm[(len << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
     console.log(this.tag.ext.toString());
@@ -191,41 +311,193 @@
     console.groupEnd();
     console.groupEnd();
   }
-
-  var Morph = function(word, config) {
-    config = config || defaults;
-
-    for (var k in defaults) {
-      if (!(k in config)) {
-        config[k] = defaults[k];
-      }
-    }
-
-    var opts;
-    if (config.typos == 'auto') {
-      opts = words.findAll(word, config.replacements, config.stutter, 0);
-      if (!opts.length && word.length > 4) {
-        opts = words.findAll(word, config.replacements, config.stutter, 1);
-        if (!opts.length && word.length > 9) {
-          opts = words.findAll(word, config.replacements, config.stutter, 2);
-        }
-      }
-    } else {
-      opts = words.findAll(word, config.replacements, config.stutter, config.typos);
-    }
-
-    var vars = [];
-    //console.log(opts);
-    for (var i = 0; i < opts.length; i++) {
-      for (var j = 0; j < opts[i][1].length; j++) {
-        var word = new Word(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
-        //word.log();
-        vars.push(word);
-      }
-    }
-    return vars;
+  DictionaryWord.prototype.toString = function() {
+    return this.val + this.suffix;
   }
 
+  __init.push(function() {
+    Morph.Parsers.Dictionary = function(word, config) {
+      word = word.toLocaleLowerCase();
+
+      var opts = lookupWord(word, config);
+
+      var vars = [];
+      //console.log(opts);
+      for (var i = 0; i < opts.length; i++) {
+        for (var j = 0; j < opts[i][1].length; j++) {
+          var w = new DictionaryWord(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+          //word.log();
+          vars.push(w);
+        }
+      }
+      return vars;
+    }
+
+    var InitialsParser = function(isPatronymic) {
+      var possibleTags = [];
+      for (var i = 0; i < 1; i++) {
+        for (var j = 0; j < 6; j++) {
+          var tag = new Tag('NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j]);
+          tag.ext = new Tag('СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]);
+          possibleTags.push(tag);
+        }
+      }
+      possibleTags = deepFreeze(possibleTags);
+      return function(word, config) {
+        if (word.length != 1) {
+          return [];
+        }
+        if (config.ignoreCase) {
+          word = word.toLocaleUpperCase();
+        }
+        if (initials.indexOf(word) == -1) {
+          return [];
+        }
+        var vars = [];
+        for (var i = 0; i < possibleTags.length; i++) {
+          var w = new Word(word, possibleTags[i]);
+          vars.push(w);
+        }
+        return vars;
+      }
+    }
+
+    Morph.Parsers.AbbrName = InitialsParser(false);
+    Morph.Parsers.AbbrPatronymic = InitialsParser(true);
+
+    var RegexpParser = function(regexp, tagInt, tagExt) {
+      var tag = new Tag(tagInt);
+      tag.ext = new Tag(tagExt);
+      tag = deepFreeze(tag);
+      return function(word, config) {
+        if (config.ignoreCase) {
+          word = word.toLocaleUpperCase();
+        }
+        if (word.length && word.match(regexp)) {
+          return [new Word(word, tag)];
+        } else {
+          return [];
+        }
+      }
+    }
+
+    grammemes['NUMB'] = grammemes['ЧИСЛО'] =
+    grammemes['ROMN'] = grammemes['РИМ'] =
+    grammemes['LATN'] = grammemes['ЛАТ'] =
+    grammemes['PNCT'] = grammemes['ЗПР'] =
+    grammemes['UNKN'] = grammemes['НЕИЗВ'] =
+     { parent: 'POST' };
+
+    Morph.Parsers.IntNumber = RegexpParser(
+      /^[−-]?[0-9]+$/,
+      'NUMB,intg', 'ЧИСЛО,цел');
+
+    Morph.Parsers.RealNumber = RegexpParser(
+      /^[−-]?([0-9]*[.,][0-9]+)$/,
+      'NUMB,real', 'ЧИСЛО,вещ');
+
+    Morph.Parsers.Punctuation = RegexpParser(
+      /^[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^_`{|}~]+$/,
+      'PNCT', 'ЗПР');
+
+    Morph.Parsers.RomanNumber = RegexpParser(
+      /^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/,
+      'ROMN', 'РИМ');
+
+    Morph.Parsers.Latin = RegexpParser(
+      /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]/,
+      'LATN', 'ЛАТ');
+
+    Morph.Parsers.HyphenParticle = function(word, config) {
+      word = word.toLocaleLowerCase();
+
+      var vars = [];
+      for (var k = 0; k < particles.length; k++) {
+        if (word.substr(word.length - particles[k].length) == particles[k]) {
+          var base = word.slice(0, -particles[k].length);
+          var opts = lookupWord(base, config);
+
+          //console.log(opts);
+          for (var i = 0; i < opts.length; i++) {
+            for (var j = 0; j < opts[i][1].length; j++) {
+              var w = new DictionaryWord(
+                opts[i][0], 
+                opts[i][1][j][0], 
+                opts[i][1][j][1], 
+                opts[i][2], 
+                opts[i][3]);
+              w.suffix = particles[k];
+              vars.push(w);
+            }
+          }
+        }
+      }
+
+      return vars;
+    }
+
+    var ADVB = new Tag('ADVB');
+    ADVB.ext = new Tag('Н');
+    ADVB = deepFreeze(ADVB);
+
+    Morph.Parsers.HyphenAdverb = function(word, config) {
+      word = word.toLocaleLowerCase();
+
+      if ((word.length < 5) || (word.substr(0, 3) != 'по-')) {
+        return [];
+      }
+
+      var opts = lookupWord(word.substr(3), config);
+
+      var vars = [];
+      var used = {};
+
+      for (var i = 0; i < opts.length; i++) {
+        if (!used[opts[i][0]]) {
+          for (var j = 0; j < opts[i][1].length; j++) {
+            var w = new DictionaryWord(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+            if (w.matches(['ADJF', 'sing', 'datv'])) {
+              used[opts[i][0]] = true;
+
+              w = new Word(word, ADVB, opts[i][2], opts[i][3]);
+              vars.push(w);
+              break;
+            }
+          }
+        }
+      }
+      return vars;
+    }
+  
+    var UNKN = new Tag('UNKN');
+    UNKN.ext = new Tag('НЕИЗВ');
+
+    Morph.Parsers.HyphenWords = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    Morph.Parsers.PrefixKnown = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    Morph.Parsers.PrefixUnknown = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    Morph.Parsers.SuffixKnown = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    Morph.Parsers.Unknown = function(word, config) {
+      var w = new Word(word.toLocaleLowerCase(), UNKN, 0, 0);
+      return [w];
+    }
+  });
+  
   Morph.setDefaults = function(config) {
     defaults = config;
   }
@@ -241,6 +513,9 @@
           tags[i].ext = new Tag(tagsExt[i]);
         }
         tags = deepFreeze(tags);
+        for (var i = 0; i < __init.length; i++) {
+          __init[i]();
+        }
         callback && callback(null, Morph);
       }
     }
