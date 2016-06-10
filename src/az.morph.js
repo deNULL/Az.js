@@ -278,6 +278,14 @@
   Parse.prototype.toString = function() {
     return this.word;
   }
+  
+  // Выводит информацию о слове в консоль.
+  Parse.prototype.log = function() {
+    console.group(this.word + this.suffix);
+    console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
+    console.log(this.tag.ext.toString());
+    console.groupEnd();
+  }
 
   function lookupWord(word, config) {
     var entries;
@@ -360,7 +368,6 @@
     return false;
   }
 
-  // Выводит информацию о слове в консоль.
   DictionaryParse.prototype.log = function() {
     var len = this.paradigm.length / 3;
     console.group(this.word + this.suffix);
@@ -379,6 +386,7 @@
     console.groupEnd();
     console.groupEnd();
   }
+
   DictionaryParse.prototype.toString = function() {
     return this.word + this.suffix;
   }

@@ -24,20 +24,62 @@
     defaults.links.tlds[TLDs[i]] = true;
   }
 
-  // Start splitting text into tokens
-  // Returns a context, use `done` method to retrieve result
+  /**
+   * Создает токенизатор текста с заданными опциями.
+   *
+   * @constructor
+   * @param {string} [text] Строка для разбивки на токены.
+   * @param {Object} [config] Опции, применяемые при разбивке.
+   * @param {boolean} [config.html=False] Распознавать и выделять в отдельные
+   *  токены (типа TAG) HTML-теги. Кроме того, содержимое тегов &lt;style&gt;
+   *  и &lt;script&gt; будет размечено как единый токен типа CONTENT.
+   * @param {boolean} [config.wiki=False] Распознавать и выделять в отдельные
+   *  токены элементы вики-разметки.
+   * @param {boolean} [config.markdown=False] Распознавать и выделять в отдельные
+   *  токены элементы Markdown-разметки.
+   * @param {boolean} [config.hashtags=True] Распознавать и выделять в отдельные
+   *  токены хэштеги (строки, начинающиеся с символа «#»).
+   * @param {boolean} [config.mentions=True] Распознавать и выделять в отдельные
+   *  токены упоминания (строки, начинающиеся с символа «@»).
+   * @param {boolean} [config.emails=True] Распознавать и выделять в отдельные
+   *  токены е-мейлы (нет, распознавание всех корректных по RFC адресов не
+   *  гарантируется).
+   * @param {Object} [config.links] Настройки распознавания ссылок. False, чтобы
+   *  не распознавать ссылки совсем.
+   * @param {boolean} [config.links.protocols=True] Распознавать и выделять в отдельные
+   *  токены ссылки с указанным протоколом (http://, https:// и вообще любым другим).
+   * @param {boolean} [config.links.www=False] Распознавать и выделять в отдельные
+   *  токены ссылки, начинающиеся с «www.».
+   * @param {Object} [config.links.tlds] Объект, в котором ключами должны быть
+   *  домены верхнего уровня, в которых будут распознаваться ссылки. По умолчанию
+   *  текущий список всех таких доменов.
+   */
   var Tokens = function(text, config) {
     if (this instanceof Tokens) {
       this.tokens = [];
-      this.config = config || defaults;
-      this.append(text);
+      if (typeof text == 'string') {
+        this.config = config || defaults;
+        this.append(text);
+      } else {
+        this.config = text || defaults;
+      }
       this.index = -1;
     } else {
       return new Tokens(text, config);
     }
   }
 
-  // Adds more text content
+  /**
+   * Отправляет ещё один кусок текста на токенизацию. Таким образом вполне
+   * допустимо обрабатывать большие документы частями, многократно вызывая этот
+   * метод. При этом токен может начаться в одной части и продолжиться в
+   * следующей (а закончиться в ещё одной).
+   *
+   * @param {string} text Строка для разбивки на токены.
+   * @param {Object} [config] Опции, применяемые при разбивке. Перекрывают
+   *  опции, заданные в конструкторе токенизатора.
+   * @see Tokens
+   */
   Tokens.prototype.append = function(text, config) {
     // TODO: get rid of 's' field (storing a copy of token)
     // st + len + en should be enough (check that they are always correct)
@@ -454,6 +496,15 @@
     return this;
   }
 
+  /**
+   * Завершает токенизацию, возвращая список токенов.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  отфильтровать результат.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Token[]} Список токенов после фильтрации.
+   */
   Tokens.prototype.done = function(filter, exclude) {
     // Finalize tokenizing, return list of tokens
     // For now it just returns tokens, in the future there could be some additional work
@@ -469,7 +520,16 @@
     return list;
   }
 
-  Tokens.prototype.countTokens = function(filter, exclude) {
+  /**
+   * Подсчитывает текущее количество токенов.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  отфильтровать результат.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. подсчитываются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Number} Число токенов после фильтрации.
+   */
+  Tokens.prototype.count = function(filter, exclude) {
     if (!skipSpace && !skipPunct) {
       return this.tokens.length;
     }
@@ -482,6 +542,19 @@
     return count;
   }
 
+  /**
+   * Получает следующий токен относительно текущей позиции.
+   *
+   * @param {boolean} moveIndex Следует ли переместить указатель к
+   *  следующему токену (в противном случае следующий вызов nextToken вернет
+   *  тот же результат)
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Token|null} Следующий токен или null, если подходящих токенов
+   *  впереди нет.
+   */
   Tokens.prototype.nextToken = function(moveIndex, filter, exclude) {
     var index = this.index;
     index++;
@@ -497,11 +570,31 @@
     return null;
   }
 
+  /**
+   * Проверяет, является ли следующий (за исключением пробелов) токен знаком
+   * препинания или нет.
+   *
+   * @returns {Token|False} False, если следующий токен не является знаком
+   *  препинания, либо сам токен в противном случае.
+   */
   Tokens.prototype.punctAhead = function() {
     var token = this.nextToken(false, ['SPACE'], true);
     return token && token.type == 'PUNCT' && token;
   }
 
+  /**
+   * Получает предыдущий токен относительно текущей позиции.
+   *
+   * @param {boolean} moveIndex Следует ли переместить указатель к
+   *  предыдущему токену (в противном случае следующий вызов prevToken вернет
+   *  тот же результат)
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Token|null} Предыдущий токен или null, если подходящих токенов
+   *  позади нет.
+   */
   Tokens.prototype.prevToken = function(moveIndex, filter, exclude) {
     var index = this.index;
     index--;
@@ -517,15 +610,42 @@
     return null;
   }
 
+  /**
+   * Проверяет, является ли предыдущий (за исключением пробелов) токен знаком
+   * препинания или нет.
+   *
+   * @returns {Token|False} False, если предыдущий токен не является знаком
+   *  препинания, либо сам токен в противном случае.
+   */
   Tokens.prototype.punctBehind = function() {
     var token = this.prevToken(false, ['SPACE'], true);
     return token && token.type == 'PUNCT' && token;
   }
 
+  /**
+   * Проверяет, есть ли впереди текущей позиции токены, удовлетворяющие фильтру.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {boolean} True если впереди есть хотя бы один подходящий токен,
+   *  и False в противном случае.
+   */
   Tokens.prototype.hasTokensAhead = function(filter, exclude) {
     return this.nextToken(false, filter, exclude) != null;
   }
 
+  /**
+   * Проверяет, есть ли позади текущей позиции токены, удовлетворяющие фильтру.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {boolean} True если позади есть хотя бы один подходящий токен,
+   *  и False в противном случае.
+   */
   Tokens.prototype.hasTokensBehind = function(filter, exclude) {
     return this.prevToken(false, filter, exclude) != null;
   }
