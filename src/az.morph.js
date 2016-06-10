@@ -56,26 +56,17 @@
       particles = ['-то', '-ка', '-таки', '-де', '-тко', '-тка', '-с', '-ста'],
       knownPrefixes = [
         'авиа', 'авто', 'аква', 'анти', 'анти-', 'антропо', 'архи', 'арт', 'арт-', 'астро', 'аудио', 'аэро',
-        'без', 'бес', 'био',
-        'вело', 'взаимо', 'вне', 'внутри', 'видео', 'вице-', 'вперед', 'впереди',
+        'без', 'бес', 'био', 'вело', 'взаимо', 'вне', 'внутри', 'видео', 'вице-', 'вперед', 'впереди',
         'гекто', 'гелио', 'гео', 'гетеро', 'гига', 'гигро', 'гипер', 'гипо', 'гомо',
-        'дву', 'двух', 'де', 'дез', 'дека', 'деци', 'дис', 'до',
-        'евро',
-        'за', 'зоо',
-        'интер', 'инфра',
-        'квази', 'квази-', 'кило', 'кино', 'контр', 'контр-', 'космо', 'космо-', 'крипто',
-        'лейб-', 'лже', 'лже-',
+        'дву', 'двух', 'де', 'дез', 'дека', 'деци', 'дис', 'до', 'евро', 'за', 'зоо', 'интер', 'инфра',
+        'квази', 'квази-', 'кило', 'кино', 'контр', 'контр-', 'космо', 'космо-', 'крипто', 'лейб-', 'лже', 'лже-',
         'макро', 'макси', 'макси-', 'мало', 'меж', 'медиа', 'медиа-', 'мега', 'мета', 'мета-', 'метео', 'метро', 'микро',
         'милли', 'мини', 'мини-', 'моно', 'мото', 'много', 'мульти',
-        'нано', 'нарко', 'не', 'небез', 'недо', 'нейро', 'нео', 'низко',
-        'обер-', 'обще', 'одно', 'около', 'орто',
+        'нано', 'нарко', 'не', 'небез', 'недо', 'нейро', 'нео', 'низко', 'обер-', 'обще', 'одно', 'около', 'орто',
         'палео', 'пан', 'пара', 'пента', 'пере', 'пиро', 'поли', 'полу', 'после', 'пост', 'пост-',
         'порно', 'пра', 'пра-', 'пред', 'пресс-', 'противо', 'противо-', 'прото', 'псевдо', 'псевдо-',
-        'радио', 'разно', 'ре', 'ретро', 'ретро-',
-        'само', 'санти', 'сверх', 'сверх-', 'спец', 'суб', 'супер', 'супер-', 'супра',
-        'теле', 'тетра', 'топ-', 'транс', 'транс-',
-        'ультра', 'унтер-',
-        'штаб-',
+        'радио', 'разно', 'ре', 'ретро', 'ретро-', 'само', 'санти', 'сверх', 'сверх-', 'спец', 'суб', 'супер', 'супер-', 'супра',
+        'теле', 'тетра', 'топ-', 'транс', 'транс-', 'ультра', 'унтер-', 'штаб-',
         'экзо', 'эко', 'эндо', 'эконом-', 'экс', 'экс-', 'экстра', 'экстра-', 'электро', 'энерго', 'этно'
       ],
       __init = [];
@@ -174,7 +165,7 @@
       return true;
     }
 
-    if (tag instanceof Entry) {
+    if (tag instanceof Parse) {
       tag = tag.tag;
     }
 
@@ -187,6 +178,12 @@
     return true;
   }
 
+  function makeTag(tagInt, tagExt) {
+    var tag = new Tag(tagInt);
+    tag.ext = new Tag(tagExt);
+    return deepFreeze(tag);
+  }
+
   var Morph = function(word, config) {
     config = config || defaults;
 
@@ -196,7 +193,7 @@
       }
     }
 
-    var entries = [];
+    var parses = [];
     var matched = false;
     for (var i = 0; i < config.parsers.length; i++) {
       var name = config.parsers[i];
@@ -210,7 +207,7 @@
           }
         }
 
-        entries = entries.concat(vars);
+        parses = parses.concat(vars);
         if (matched && terminal) {
           break;
         }
@@ -222,40 +219,40 @@
     var total = 0;
     var probs = [];
     var useProbs = false;
-    for (var i = 0; i < entries.length; i++) {
-      var res = probabilities.findAll(entries[i] + ':' + entries[i].tag);
+    for (var i = 0; i < parses.length; i++) {
+      var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
       if (res && res[0]) {
         probs.push(res[0][1] / 1000000);
         useProbs = true;
       } else {
         probs.push(0);
       }
-      total += entries[i].score;
+      total += parses[i].score;
     }
 
     if (useProbs) {
-      for (var i = 0; i < entries.length; i++) {
-        entries[i].score = probs[i];
+      for (var i = 0; i < parses.length; i++) {
+        parses[i].score = probs[i];
       }
     } else
     if (total > 0) {
-      for (var i = 0; i < entries.length; i++) {
-        entries[i].score /= total;
+      for (var i = 0; i < parses.length; i++) {
+        parses[i].score /= total;
       }
     }
 
-    entries.sort(function(e1, e2) {
+    parses.sort(function(e1, e2) {
       return e2.score - e1.score;
     });
 
-    return entries;
+    return parses;
   }
 
   // TODO: вынести парсеры в отдельный файл(ы)?
 
   Morph.Parsers = {}
 
-  var Entry = function(word, tag, score, stutterCnt, typosCnt) {
+  var Parse = function(word, tag, score, stutterCnt, typosCnt) {
     this.word = word;
     this.tag = tag;
     this.stutterCnt = stutterCnt || 0;
@@ -265,37 +262,37 @@
 
   // Приводит к начальной форме. Аргумент keepPOS=true нужен, если требуется не менять часть речи при нормализации (например, не делать из причастия инфинитив).
   // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
-  Entry.prototype.normalize = function(keepPOS) {
+  Parse.prototype.normalize = function(keepPOS) {
     return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
   }
 
-  Entry.prototype.inflect = function() {
+  Parse.prototype.inflect = function() {
     return [this.word, this.tag];
   }
 
   // Аналогично Tag.prototype.matches.
-  Entry.prototype.matches = function(tag, grammemes) {
+  Parse.prototype.matches = function(tag, grammemes) {
     return this.tag.matches(tag, grammemes);
   }
 
-  Entry.prototype.toString = function() {
+  Parse.prototype.toString = function() {
     return this.word;
   }
 
   function lookupWord(word, config) {
-    var results;
+    var entries;
     if (config.typos == 'auto') {
-      results = words.findAll(word, config.replacements, config.stutter, 0);
+      entries = words.findAll(word, config.replacements, config.stutter, 0);
       if (!results.length && word.length > 4) {
-        results = words.findAll(word, config.replacements, config.stutter, 1);
+        entries = words.findAll(word, config.replacements, config.stutter, 1);
         if (!results.length && word.length > 9) {
-          results = words.findAll(word, config.replacements, config.stutter, 2);
+          entries = words.findAll(word, config.replacements, config.stutter, 2);
         }
       }
     } else {
-      results = words.findAll(word, config.replacements, config.stutter, config.typos);
+      entries = words.findAll(word, config.replacements, config.stutter, config.typos);
     }
-    return results;
+    return entries;
   }
 
   function getDictionaryScore(stutterCnt, typosCnt) {
@@ -306,24 +303,23 @@
     return Math.pow(0.5, Math.min(stutterCnt, 1) + typosCnt);
   }
 
-  var DictionaryEntry = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt) {
+  var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt) {
     this.word = word;
     this.paradigmIdx = paradigmIdx;
     this.paradigm = paradigms[paradigmIdx];
-    var len = this.paradigm.length / 3;
     this.formIdx = formIdx;
-    this.tag = tags[this.paradigm[len + formIdx]];
+    this.tag = tags[this.paradigm[(this.paradigm.length / 3) + formIdx]];
     this.stutterCnt = stutterCnt || 0;
     this.typosCnt = typosCnt || 0;
     this.score = getDictionaryScore(stutterCnt, typosCnt);
     this.suffix = '';
   }
 
-  DictionaryEntry.prototype = Object.create(Entry.prototype);
-  DictionaryEntry.prototype.constructor = DictionaryEntry;
+  DictionaryParse.prototype = Object.create(Parse.prototype);
+  DictionaryParse.prototype.constructor = DictionaryParse;
 
   // Возвращает основу слова
-  DictionaryEntry.prototype.base = function() {
+  DictionaryParse.prototype.base = function() {
     if (this._base) {
       return this._base;
     }
@@ -336,7 +332,7 @@
 
   // Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
   // Всегда выбирается первый подходящий вариант.
-  DictionaryEntry.prototype.inflect = function(tag, grammemes) {
+  DictionaryParse.prototype.inflect = function(tag, grammemes) {
     var len = this.paradigm.length / 3;
     if (!grammemes && typeof tag === 'number') {
       // Inflect to specific formIdx
@@ -365,7 +361,7 @@
   }
 
   // Выводит информацию о слове в консоль.
-  DictionaryEntry.prototype.log = function() {
+  DictionaryParse.prototype.log = function() {
     var len = this.paradigm.length / 3;
     console.group(this.word + this.suffix);
     console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
@@ -383,7 +379,7 @@
     console.groupEnd();
     console.groupEnd();
   }
-  DictionaryEntry.prototype.toString = function() {
+  DictionaryParse.prototype.toString = function() {
     return this.word + this.suffix;
   }
 
@@ -396,7 +392,7 @@
       var vars = [];
       for (var i = 0; i < opts.length; i++) {
         for (var j = 0; j < opts[i][1].length; j++) {
-          var w = new DictionaryEntry(
+          var w = new DictionaryParse(
             opts[i][0], 
             opts[i][1][j][0], 
             opts[i][1][j][1], 
@@ -409,15 +405,15 @@
     }
 
     var InitialsParser = function(isPatronymic, score) {
-      var possibleTags = [];
+      var initialsTags = [];
       for (var i = 0; i < 1; i++) {
         for (var j = 0; j < 6; j++) {
-          var tag = new Tag('NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j]);
-          tag.ext = new Tag('СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]);
-          possibleTags.push(tag);
+          initialsTags.push(makeTag(
+            'NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
+            'СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
+          ));
         }
       }
-      possibleTags = deepFreeze(possibleTags);
       return function(word, config) {
         if (word.length != 1) {
           return [];
@@ -429,8 +425,8 @@
           return [];
         }
         var vars = [];
-        for (var i = 0; i < possibleTags.length; i++) {
-          var w = new Entry(word, possibleTags[i], score);
+        for (var i = 0; i < initialsTags.length; i++) {
+          var w = new Parse(word, initialsTags[i], score);
           vars.push(w);
         }
         return vars;
@@ -440,16 +436,13 @@
     Morph.Parsers.AbbrName = InitialsParser(false, 0.1);
     Morph.Parsers.AbbrPatronymic = InitialsParser(true, 0.1);
 
-    var RegexpParser = function(regexp, tagInt, tagExt, score) {
-      var tag = new Tag(tagInt);
-      tag.ext = new Tag(tagExt);
-      tag = deepFreeze(tag);
+    var RegexpParser = function(regexp, tag, score) {
       return function(word, config) {
         if (config.ignoreCase) {
           word = word.toLocaleUpperCase();
         }
         if (word.length && word.match(regexp)) {
-          return [new Entry(word, tag)];
+          return [new Parse(word, tag)];
         } else {
           return [];
         }
@@ -465,23 +458,23 @@
 
     Morph.Parsers.IntNumber = RegexpParser(
       /^[−-]?[0-9]+$/,
-      'NUMB,intg', 'ЧИСЛО,цел', 0.9);
+      makeTag('NUMB,intg', 'ЧИСЛО,цел'), 0.9);
 
     Morph.Parsers.RealNumber = RegexpParser(
       /^[−-]?([0-9]*[.,][0-9]+)$/,
-      'NUMB,real', 'ЧИСЛО,вещ', 0.9);
+      makeTag('NUMB,real', 'ЧИСЛО,вещ'), 0.9);
 
     Morph.Parsers.Punctuation = RegexpParser(
       /^[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^_`{|}~]+$/,
-      'PNCT', 'ЗПР', 0.9);
+      makeTag('PNCT', 'ЗПР'), 0.9);
 
     Morph.Parsers.RomanNumber = RegexpParser(
       /^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/,
-      'ROMN', 'РИМ', 0.9);
+      makeTag('ROMN', 'РИМ'), 0.9);
 
     Morph.Parsers.Latin = RegexpParser(
       /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]/,
-      'LATN', 'ЛАТ', 0.9);
+      makeTag('LATN', 'ЛАТ'), 0.9);
 
     // слово + частица
     // смотри-ка
@@ -497,7 +490,7 @@
           //console.log(opts);
           for (var i = 0; i < opts.length; i++) {
             for (var j = 0; j < opts[i][1].length; j++) {
-              var w = new DictionaryEntry(
+              var w = new DictionaryParse(
                 opts[i][0], 
                 opts[i][1][j][0], 
                 opts[i][1][j][1],
@@ -514,9 +507,7 @@
       return vars;
     }
 
-    var ADVB = new Tag('ADVB');
-    ADVB.ext = new Tag('Н');
-    ADVB = deepFreeze(ADVB);
+    var ADVB = makeTag('ADVB', 'Н');
 
     // 'по-' + прилагательное в дательном падеже
     // по-западному
@@ -535,11 +526,11 @@
       for (var i = 0; i < opts.length; i++) {
         if (!used[opts[i][0]]) {
           for (var j = 0; j < opts[i][1].length; j++) {
-            var w = new DictionaryEntry(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+            var w = new DictionaryParse(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
             if (w.matches(['ADJF', 'sing', 'datv'])) {
               used[opts[i][0]] = true;
 
-              w = new Entry(word, ADVB, w.score * 0.7, opts[i][2], opts[i][3]);
+              w = new Parse(word, ADVB, w.score * 0.7, opts[i][2], opts[i][3]);
               vars.push(w);
               break;
             }
@@ -548,9 +539,6 @@
       }
       return vars;
     }
-  
-    var UNKN = new Tag('UNKN');
-    UNKN.ext = new Tag('НЕИЗВ');
 
     // слово + '-' + слово
     // интернет-магазин
@@ -576,8 +564,10 @@
       return [];
     }
 
+    var UNKN = makeTag('UNKN', 'НЕИЗВ');
+
     Morph.Parsers.Unknown = function(word, config) {
-      return [new Entry(word.toLocaleLowerCase(), UNKN)];
+      return [new Parse(word.toLocaleLowerCase(), UNKN)];
     }
   });
   
