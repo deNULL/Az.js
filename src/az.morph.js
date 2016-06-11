@@ -634,7 +634,11 @@
     // интернет-магазин
     // компания-производитель
     Morph.Parsers.HyphenWords = function(word, config) {
-      // TODO
+      var parts = word.toLocaleLowerCase().split('-');
+      if (parts.length != 2) {
+        return [];
+      }
+      
       return [];
     }
 
