@@ -41,6 +41,7 @@
     "gulp-sourcemaps": "^2.0.0-alpha",
     "gulp-uglify": "^1.5.3",
     "gulp-util": "^3.0.7",
+    "merge-stream": "^1.0.0",
     "mocha": "^2.4.5",
     "sinon": "^1.17.3"
   },
