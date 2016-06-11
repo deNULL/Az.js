@@ -137,9 +137,9 @@
             '<div class="pure-u-1-2">Граммемы<br/><small>внутренний формат</small></div>' +
               '<div class="pure-u-1-2">' + variants[i].tag + '</div>' +
             '<div class="pure-u-1-2">Начальная форма</div>' +
-              '<div class="pure-u-1-2">' + variants[i].normalize()[0] + '</div>' +
+              '<div class="pure-u-1-2">' + variants[i].normalize() + '</div>' +
             '<div class="pure-u-1-2">Начальная форма<br/><small>(та же часть речи)</small></div>' +
-              '<div class="pure-u-1-2">' + variants[i].normalize(true)[0] + '</div>' +
+              '<div class="pure-u-1-2">' + variants[i].normalize(true) + '</div>' +
             '<div class="pure-u-1-2">Устранено повторов букв</div>' +
               '<div class="pure-u-1-2">' + (variants[i].stutterCnt || 0) + '</div>' +
             '<div class="pure-u-1-2">Устранено опечаток</div>' +
@@ -150,8 +150,8 @@
           for (var formIdx = 0; formIdx < variants[i].paradigm.length / 3; formIdx++) {
             var form = variants[i].inflect(formIdx);
             html.push(
-              '<div class="pure-u-1 pure-u-md-1-2"><strong>' + form[0] + '</strong></div>' +
-                '<div class="pure-u-1 pure-u-md-1-2">' + form[1].ext + '</div>');
+              '<div class="pure-u-1-2"><strong>' + form + '</strong></div>' +
+                '<div class="pure-u-1-2">' + form.tag.ext + '</div>');
           }
         }
         html.push('</div>' +

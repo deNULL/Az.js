@@ -308,8 +308,8 @@
    *
    * @param {boolean} keepPOS Не менять часть речи при нормализации (например,
    *  не делать из причастия инфинитив).
-   * @returns {[ string, Tag ]} Массив из двух элементов: нормализованное слово
-   *  и тег использованной формы.
+   * @returns {Parse} Разбор, соответствующий начальной форме или False,
+   *  если произвести нормализацию не удалось.
    */
   // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
   Parse.prototype.normalize = function(keepPOS) {
@@ -322,12 +322,12 @@
    * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
    *  согласовать данный.
    * @param {Array|Object} grammemes Граммемы, по которым нужно согласовать слово.
-   * @returns {[ string, Tag ]} Массив из двух элементов: склоненное слово
-   *  и тег использованной формы.
+   * @returns {Parse|False} Разбор, соответствующий указанной форме или False,
+   *  если произвести согласование не удалось.
    * @see Tag.matches
    */
   Parse.prototype.inflect = function(tag, grammemes) {
-    return [this.word, this.tag];
+    return this;
   }
 
   /**
@@ -365,7 +365,7 @@
     var entries;
     if (config.typos == 'auto') {
       entries = words.findAll(word, config.replacements, config.stutter, 0);
-      if (!results.length && word.length > 4) {
+      if (!entries.length && word.length > 4) {
         entries = words.findAll(word, config.replacements, config.stutter, 1);
         if (!results.length && word.length > 9) {
           entries = words.findAll(word, config.replacements, config.stutter, 2);
@@ -418,24 +418,24 @@
     var len = this.paradigm.length / 3;
     if (!grammemes && typeof tag === 'number') {
       // Inflect to specific formIdx
-      return [
+      return new Parse(
           prefixes[this.paradigm[(len << 1) + tag]] +
           this.base() +
           suffixes[this.paradigm[tag]] +
           this.suffix,
         tags[this.paradigm[len + tag]]
-      ];
+      );
     }
 
     for (var formIdx = 0; formIdx < len; formIdx++) {
       if (tags[this.paradigm[len + formIdx]].matches(tag, grammemes)) {
-        return [
+        return new Parse(
             prefixes[this.paradigm[(len << 1) + formIdx]] +
             this.base() +
             suffixes[this.paradigm[formIdx]] +
             this.suffix,
           tags[this.paradigm[len + formIdx]]
-        ];
+        );
       }
     }
 
