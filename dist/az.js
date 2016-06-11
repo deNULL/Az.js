@@ -1002,7 +1002,7 @@
       if (parts.length != 2) {
         return [];
       }
-      
+
       return [];
     }
 
@@ -1044,7 +1044,8 @@
    * указанной директории. Эту функцию необходимо вызвать (и дождаться
    * срабатывания коллбэка) до любых действий с модулем.
    *
-   * @param {string} path Директория, содержащая файлы 'words.dawg', 'grammemes.json' и т.д.
+   * @param {string} [path] Директория, содержащая файлы 'words.dawg',
+   * 'grammemes.json' и т.д. По умолчанию директория 'dicts' в данном модуле.
    * @param {callback} callback Коллбэк, вызываемый после завершения загрузки
    *  всех словарей.
    */
@@ -1063,6 +1064,15 @@
           __init[i]();
         }
         callback && callback(null, Morph);
+      }
+    }
+
+    if (!callback && typeof path == 'function') {
+      callback = path;
+      if (typeof __dirname == 'string') {
+        path = __dirname + '/../dicts';
+      } else {
+        path = 'dicts';
       }
     }
 
