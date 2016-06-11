@@ -146,8 +146,8 @@
               '<div class="pure-u-1-2">' + (variants[i].typosCnt || 0) + '</div>' +
             '<div class="pure-u-1"><a href="#" onclick="showAll(' + i + '); return false;">Показать все формы</a></div>' +
               '<div id="allForms' + i + '" style="display: none">');
-        if (variants[i].paradigm) {
-          for (var formIdx = 0; formIdx < variants[i].paradigm.length / 3; formIdx++) {
+        if (variants[i].formCnt) {
+          for (var formIdx = 0; formIdx < variants[i].formCnt; formIdx++) {
             var form = variants[i].inflect(formIdx);
             html.push(
               '<div class="pure-u-1-2"><strong>' + form + '</strong></div>' +
