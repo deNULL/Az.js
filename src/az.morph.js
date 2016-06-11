@@ -3,6 +3,7 @@
   typeof define === 'function' && define.amd ? define('Az.Morph', ['Az', 'Az.DAWG'], factory) :
   (global.Az = global.Az || {}) && (global.Az.Morph = factory(global.Az))
 }(this, function (Az) { 'use strict';
+  /** @namespace Az **/
   var words,
       probabilities,
       predictionSuffixes = new Array(3),
@@ -189,9 +190,9 @@
    *  при поиске слов в словаре. Ключи объекта — заменяемые буквы в разбираемом
    *  слове, соответствующие им значения — буквы в словарных словах, которым
    *  допустимо встречаться вместо заменяемых. По умолчанию буква «е» может
-   *  может соответствовать букве «ё» в словарных словах.
-   * @param {number} [config.stutter=Infinity] "Заикание". Устраняет повторения букв
-   *  (как с дефисом - "не-е-ет", так и без - "нееет").
+   *  соответствовать букве «ё» в словарных словах.
+   * @param {number} [config.stutter=Infinity] «Заикание». Устраняет повторения букв
+   *  (как с дефисом - «не-е-ет», так и без - «нееет»).
    *  Infinity не ограничивает максимальное число повторений (суммарно во всем слове).
    *  0 или false чтобы отключить.
    * @param {number|'auto'} [config.typos=0] Опечатки. Максимальное количество
@@ -215,6 +216,7 @@
    *  парсеры либо не дали результата совсем, либо дали только с опечатками.
    *  (парсер в терминологии pymorphy2 - анализатор)
    * @returns {Parse[]} Варианты разбора.
+   * @memberof Az
    */
   var Morph = function(word, config) {
     config = config || defaults;
