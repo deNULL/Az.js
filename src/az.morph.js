@@ -175,6 +175,13 @@
     return true;
   }
 
+  Tag.prototype.isProductive = function() {
+    return !(this.NUMR || this.NPRO || this.PRED || this.PREP || 
+      this.CONJ || this.PRCL || this.INTJ || this.Apro || 
+      this.NUMB || this.ROMN || this.LATN || this.PNCT ||
+      this.UNKN);
+  }
+
   function makeTag(tagInt, tagExt) {
     var tag = new Tag(tagInt);
     tag.ext = new Tag(tagExt);
@@ -745,10 +752,17 @@
       var word = word.toLocaleLowerCase();
       var parses = [];
       for (var i = 0; i < knownPrefixes.length; i++) {
+        if (word.length - knownPrefixes[i].length < 3) {
+          continue;
+        }
+
         if (word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
           var end = word.substr(knownPrefixes[i].length);
           var right = Morph(end, Az.extend(config, { forceParse: false, normalizeScore: false }));
           for (var j = 0; j < right.length; j++) {
+            if (!right[j].tag.isProductive()) {
+              continue;
+            }
             right[j].score *= 0.75;
             right[j].prefix = knownPrefixes[i];
             parses.push(right[j]);
