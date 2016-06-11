@@ -1,8 +1,8 @@
 {
   "name": "az",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A NLP library for Russian language",
-  "main": "dist/az.min.js",
+  "main": "dist/az.js",
   "scripts": {
     "test": "mocha"
   },
