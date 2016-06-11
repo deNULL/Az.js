@@ -1,4 +1,5 @@
 files:
+  - src/az.js
   - src/az.tokens.js
   - src/az.morph.js
   - src/az.syntax.js
