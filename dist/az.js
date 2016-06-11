@@ -544,6 +544,11 @@
    * Производит морфологический анализ слова. Возвращает возможные варианты
    * разбора по убыванию их правдоподобности.
    *
+   * @playground
+   * var Az = require('az');
+   * Az.Morph(function() {
+   *   console.log(Az.Morph('стали'));
+   * });
    * @param {string} word Слово, которое следует разобрать.
    * @param {Object} [config] Опции разбора.
    * @param {boolean} [config.ignoreCase=False] Следует ли игнорировать

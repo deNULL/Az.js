@@ -182,7 +182,7 @@
    *
    * @playground
    * var Az = require('az');
-   * Az.Morph(function() {
+   * Az.Morph.init(function() {
    *   console.log(Az.Morph('стали'));
    * });
    * @param {string} word Слово, которое следует разобрать.
