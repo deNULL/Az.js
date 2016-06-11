@@ -29,7 +29,7 @@ $ bower install az --save
 
 ## Полезные ссылки
 
-- [Демо](https://denull.github.io/Az.js/)
+- [Демо](http://denull.github.io/Az.js/)
 - Документация по API библиотеки: [на GitHub](https://github.com/deNULL/Az.js/wiki/) | [на Doclets.io](https://doclets.io/deNULL/Az.js/master)
 - [Документация pymorphy2](http://pymorphy2.readthedocs.io/en/latest/user/index.html)
 - [Открытый корпус OpenCorpora](http://opencorpora.org/) и [его список граммем](http://opencorpora.org/dict.php?act=gram)
