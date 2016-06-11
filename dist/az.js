@@ -3,6 +3,7 @@
   typeof define === 'function' && define.amd ? define('Az', factory) :
   global.Az = factory()
 }(this, function () { 'use strict';
+  /** @namespace Az **/
   if (typeof require != 'undefined' && typeof exports === 'object' && typeof module !== 'undefined') {
     var fs = require('fs');
   }
@@ -44,6 +45,7 @@
 
   return Az;
 }));
+
 ;(function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.DAWG = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.DAWG', ['Az'], factory) :
@@ -374,27 +376,39 @@
       paradigms,
       tags,
       defaults = {
-        // Замены (работают как в pymorphy2).
-        // false, чтобы отключить.
+        ignoreCase: false,
         replacements: { 'е': 'ё' },
-        // "Заикание". Устраняет повторения букв (как с дефисом - "не-е-ет", так и без - "нееет").
-        // Infinity не ограничивает максимальное число повторений (суммарно во всем слове).
-        // 0 или false чтобы отключить.
         stutter: Infinity,
-        // Опечатки. Максимальное количество опечаток в слове.
-        // Опечаткой считается:
-        // - лишняя буква в слове
-        // - (пропущенная буква в слове) (TODO: пока не работает)
-        // - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
-        // - переставленные местами соседние буквы
-        // 0 или false чтобы отключить.
-        // 'auto':
-        // - 0, если слово короче 5 букв
-        // - 1, если слово короче 10 букв (но только если не нашлось варианта разбора без опечаток)
-        // - 2 в противном случае (но только если не нашлось варианта разбора без опечаток или с 1 опечаткой)
-        typos: 0
-        // Совместное появление опечаток и "заикания" считается недопустимым (т.к. это приводит к большому числу вариантов, особенно на словах с "заиканием")
-      };
+        typos: 0,
+        parsers: [
+          // Словарные слова + инициалы
+          'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
+          // Числа, пунктуация, латиница (по-хорошему, токенизатор не должен эту ерунду сюда пускать)
+          'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
+          // Слова с дефисами
+          'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
+          // Предсказатели по префиксам/суффиксам
+          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown', 'Unknown'
+        ]
+      },
+      initials = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ',
+      particles = ['-то', '-ка', '-таки', '-де', '-тко', '-тка', '-с', '-ста'],
+      knownPrefixes = [
+        'авиа', 'авто', 'аква', 'анти', 'анти-', 'антропо', 'архи', 'арт', 'арт-', 'астро', 'аудио', 'аэро',
+        'без', 'бес', 'био', 'вело', 'взаимо', 'вне', 'внутри', 'видео', 'вице-', 'вперед', 'впереди',
+        'гекто', 'гелио', 'гео', 'гетеро', 'гига', 'гигро', 'гипер', 'гипо', 'гомо',
+        'дву', 'двух', 'де', 'дез', 'дека', 'деци', 'дис', 'до', 'евро', 'за', 'зоо', 'интер', 'инфра',
+        'квази', 'квази-', 'кило', 'кино', 'контр', 'контр-', 'космо', 'космо-', 'крипто', 'лейб-', 'лже', 'лже-',
+        'макро', 'макси', 'макси-', 'мало', 'меж', 'медиа', 'медиа-', 'мега', 'мета', 'мета-', 'метео', 'метро', 'микро',
+        'милли', 'мини', 'мини-', 'моно', 'мото', 'много', 'мульти',
+        'нано', 'нарко', 'не', 'небез', 'недо', 'нейро', 'нео', 'низко', 'обер-', 'обще', 'одно', 'около', 'орто',
+        'палео', 'пан', 'пара', 'пента', 'пере', 'пиро', 'поли', 'полу', 'после', 'пост', 'пост-',
+        'порно', 'пра', 'пра-', 'пред', 'пресс-', 'противо', 'противо-', 'прото', 'псевдо', 'псевдо-',
+        'радио', 'разно', 'ре', 'ретро', 'ретро-', 'само', 'санти', 'сверх', 'сверх-', 'спец', 'суб', 'супер', 'супер-', 'супра',
+        'теле', 'тетра', 'топ-', 'транс', 'транс-', 'ультра', 'унтер-', 'штаб-',
+        'экзо', 'эко', 'эндо', 'эконом-', 'экс', 'экс-', 'экстра', 'экстра-', 'электро', 'энерго', 'этно'
+      ],
+      __init = [];
 
   // Взято из https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
   function deepFreeze(obj) {
@@ -413,38 +427,34 @@
     return Object.freeze(obj);
   }
 
-  //
-  // Экземпляры Tag могут быть довольно большими, т.к. будут переиспользоваться для всех слов.
-  // Однако это приводит к запрету на любые изменения этих экземпляров. В современных браузерах для этого будет использован метод Object.freeze()
-  // Каждая граммема хранится внутри тега в нескольких местах:
-  //   tag[grammeme] = true | false
-  //   tag[parent] = grammeme
-  //   tag.stat = [grammeme1, grammeme2, ...] // неизменяемые граммемы
-  //   tag.flex = [grammeme1, grammeme2, ...] // изменяемые граммемы
-  //
-  //
-  //   tag.ext[grammemeCyr] = true | false
-  //   tag.ext[parentCyr] = grammemeCyr
-  //   tag.ext.stat = [grammemeCyr1, grammemeCyr2, ...] // неизменяемые граммемы
-  //   tag.ext.flex = [grammemeCyr1, grammemeCyr2, ...] // изменяемые граммемы
-  //
-  //
-  //   Тут grammeme - латинская запись граммемы, grammemeCyr - кириллическая
-  //   parent, parentCyr - родительская граммема.
-  //
+  /**
+   * Тег. Содержит в себе информацию о конкретной форме слова, но при этом
+   * к конкретному слову не привязан. Всевозможные значения тегов переиспользуются
+   * для всех разборов слов.
+   *
+   * Все граммемы навешаны на тег как поля. Если какая-то граммема содержит в себе
+   * дочерние граммемы, то значением поля является именно название дочерней
+   * граммемы (например, tag.GNdr == 'masc'). В то же время для дочерних граммем
+   * значением является просто true (т.е. условие можно писать и просто как
+   * if (tag.masc) ...).
+   *
+   * @property {string[]} stat Полный список неизменяемых граммем.
+   * @property {string[]} flex Полный список изменяемых граммем.
+   * @property {Tag} ext Копия тега с русскими обозначениями (по версии OpenCorpora).
+   */
   var Tag = function(str) {
     var par, pair = str.split(' ');
     this.stat = pair[0].split(',');
     for (var i = 0; i < this.stat.length; i++) {
       this[this.stat[i]] = true;
-      if (par = grammemes[this.stat[i]].parent) {
+      if (grammemes[this.stat[i]] && (par = grammemes[this.stat[i]].parent)) {
         this[par] = this.stat[i];
       }
     }
     this.flex = pair[1] ? pair[1].split(',') : [];
     for (var i = 0; i < this.flex.length; i++) {
       this[this.flex[i]] = true;
-      if (par = grammemes[this.flex[i]].parent) {
+      if (grammemes[this.flex[i]] && (par = grammemes[this.flex[i]].parent)) {
         this[par] = this.flex[i];
       }
     }
@@ -452,16 +462,50 @@
       this.POS = this.POST;
     }
   }
+
+  /**
+   * Возвращает текстовое представление тега.
+   *
+   * @returns {string} Список неизменяемых граммем через запятую, пробел,
+   *  и список изменяемых граммем через запятую.
+   */
   Tag.prototype.toString = function() {
     return (this.stat.join(',') + ' ' + this.flex.join(',')).trim();
   }
-  // Проверяет согласованность с конкретными значениями граммем либо со списком граммем из другого тега (или слова)
-  // tag.matches({ 'POS' : 'NOUN', 'GNdr': ['masc', 'neut'] })
-  //   Ключи — названия граммем, значения — дочерние граммемы, массивы граммем, либо true/false
-  // tag.matches(otherTag, ['POS', 'GNdr'])
-  //   Тег (или слово) + список граммем, значения которых у этих двух тегов должны совпадать
+
+  /**
+   * Проверяет согласованность с конкретными значениями граммем либо со списком
+   * граммем из другого тега (или слова).
+   *
+   * @param {Tag|Parse} [tag] Тег или разбор слова, с которым следует
+   *  проверить согласованность.
+   * @param {Array|Object} grammemes Граммемы, по которым нужно проверить
+   *  согласованность.
+   *
+   *  Если указан тег (или разбор), то grammemes должен быть массивом тех
+   *  граммем, которые у обоих тегов должны совпадать. Например:
+   *  tag.matches(otherTag, ['POS', 'GNdr'])
+   *
+   *  Если тег не указан, а указан массив граммем, то проверяется просто их
+   *  наличие. Например, аналог выражения (tag.NOUN && tag.masc):
+   *  tag.matches([ 'NOUN', 'masc' ])
+   *
+   *  Если тег не указан, а указан объект, то ключи в нем — названия граммем,
+   *  значения — дочерние граммемы, массивы граммем, либо true/false:
+   *  tag.matches({ 'POS' : 'NOUN', 'GNdr': ['masc', 'neut'] })
+   * @returns {boolean} Является ли текущий тег согласованным с указанным.
+   */
+  // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
   Tag.prototype.matches = function(tag, grammemes) {
     if (!grammemes) {
+      if (Object.prototype.toString.call(tag) === '[object Array]') {
+        for (var i = 0; i < tag.length; i++) {
+          if (!this[tag[i]]) {
+            return false;
+          }
+        }
+        return true;
+      } else
       // Match to map
       for (var k in tag) {
         if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
@@ -477,7 +521,7 @@
       return true;
     }
 
-    if (tag instanceof Word) {
+    if (tag instanceof Parse) {
       tag = tag.tag;
     }
 
@@ -490,54 +534,294 @@
     return true;
   }
 
-  var Word = function(val, paradigmIdx, formIdx, stutterCnt, typosCnt) {
-    this.val = val;
+  function makeTag(tagInt, tagExt) {
+    var tag = new Tag(tagInt);
+    tag.ext = new Tag(tagExt);
+    return deepFreeze(tag);
+  }
+
+  /**
+   * Производит морфологический анализ слова. Возвращает возможные варианты
+   * разбора по убыванию их правдоподобности.
+   *
+   * @playground
+   * var Az = require('az');
+   * Az.Morph(function() {
+   *   console.log(Az.Morph('стали'));
+   * });
+   * @param {string} word Слово, которое следует разобрать.
+   * @param {Object} [config] Опции разбора.
+   * @param {boolean} [config.ignoreCase=False] Следует ли игнорировать
+   *  регистр слов (в основном это означает возможность написания имен собственных и
+   *  инициалов с маленькой буквы).
+   * @param {Object} [config.replacements={ 'е': 'ё' }] Допустимые замены букв
+   *  при поиске слов в словаре. Ключи объекта — заменяемые буквы в разбираемом
+   *  слове, соответствующие им значения — буквы в словарных словах, которым
+   *  допустимо встречаться вместо заменяемых. По умолчанию буква «е» может
+   *  соответствовать букве «ё» в словарных словах.
+   * @param {number} [config.stutter=Infinity] «Заикание». Устраняет повторения букв
+   *  (как с дефисом - «не-е-ет», так и без - «нееет»).
+   *
+   *  Infinity не ограничивает максимальное число повторений (суммарно во всем слове).
+   *
+   *  0 или false чтобы отключить.
+   * @param {number|'auto'} [config.typos=0] Опечатки. Максимальное количество
+   * опечаток в слове.
+   *
+   *  Опечаткой считается:
+   *   - лишняя буква в слове
+   *   - (пропущенная буква в слове) (TODO: пока не работает)
+   *   - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
+   *   - переставленные местами соседние буквы
+   *
+   *  0 или false чтобы отключить.
+   *
+   *  'auto':
+   *  - 0, если слово короче 5 букв
+   *  - 1, если слово короче 10 букв (но только если не нашлось варианта разбора без опечаток)
+   *  - 2 в противном случае (но только если не нашлось варианта разбора без опечаток или с 1 опечаткой)
+   * @param {string[]} [config.parsers] Список применяемых парсеров (см. поля
+   *  объекта Az.Morph.Parsers) в порядке применения (т.е. стоящие в начале
+   *  имеют наивысший приоритет).
+   *
+   *  Вопросительный знак означает, что данный парсер не терминальный, то есть
+   *  варианты собираются до первого терминального парсера. Иными словами, если
+   *  мы дошли до какого-то парсера, значит все стоящие перед ним терминальные
+   *  парсеры либо не дали результата совсем, либо дали только с опечатками.
+   *
+   *  (парсер в терминологии pymorphy2 — анализатор)
+   * @returns {Parse[]} Варианты разбора.
+   * @memberof Az
+   */
+  var Morph = function(word, config) {
+    config = config || defaults;
+
+    for (var k in defaults) {
+      if (!(k in config)) {
+        config[k] = defaults[k];
+      }
+    }
+
+    var parses = [];
+    var matched = false;
+    for (var i = 0; i < config.parsers.length; i++) {
+      var name = config.parsers[i];
+      var terminal = name[name.length - 1] != '?';
+      name = terminal ? name : name.slice(0, -1);
+      if (name in Morph.Parsers) {
+        var vars = Morph.Parsers[name](word, config);
+        for (var j = 0; j < vars.length; j++) {
+          if (!vars[j].stutterCnt && !vars[j].typosCnt) {
+            matched = true;
+          }
+        }
+
+        parses = parses.concat(vars);
+        if (matched && terminal) {
+          break;
+        }
+      } else {
+        console.warn('Parser "' + name + '" is not found. Skipping');
+      }
+    }
+
+    var total = 0;
+    var probs = [];
+    var useProbs = false;
+    for (var i = 0; i < parses.length; i++) {
+      var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
+      if (res && res[0]) {
+        probs.push(res[0][1] / 1000000);
+        useProbs = true;
+      } else {
+        probs.push(0);
+      }
+      total += parses[i].score;
+    }
+
+    if (useProbs) {
+      for (var i = 0; i < parses.length; i++) {
+        parses[i].score = probs[i];
+      }
+    } else
+    if (total > 0) {
+      for (var i = 0; i < parses.length; i++) {
+        parses[i].score /= total;
+      }
+    }
+
+    parses.sort(function(e1, e2) {
+      return e2.score - e1.score;
+    });
+
+    return parses;
+  }
+
+  // TODO: вынести парсеры в отдельный файл(ы)?
+
+  Morph.Parsers = {}
+
+  /**
+   * Один из возможных вариантов морфологического разбора.
+   *
+   * @property {string} word Слово в текущей форме (с исправленными ошибками,
+   *  если они были)
+   * @property {Tag} tag Тег, описывающий текущую форму слова.
+   * @property {number} score Число от 0 до 1, соответствующее «уверенности»
+   *  в данном разборе (чем оно выше, тем вероятнее данный вариант).
+   * @property {number} stutterCnt Число «заиканий», исправленных в слове.
+   * @property {number} typosCnt Число опечаток, исправленных в слове.
+   */
+  var Parse = function(word, tag, score, stutterCnt, typosCnt) {
+    this.word = word;
+    this.tag = tag;
+    this.stutterCnt = stutterCnt || 0;
+    this.typosCnt = typosCnt || 0;
+    this.score = score || 0;
+  }
+
+  /**
+   * Приводит слово к его начальной форме.
+   *
+   * @param {boolean} keepPOS Не менять часть речи при нормализации (например,
+   *  не делать из причастия инфинитив).
+   * @returns {Parse} Разбор, соответствующий начальной форме или False,
+   *  если произвести нормализацию не удалось.
+   */
+  // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
+  Parse.prototype.normalize = function(keepPOS) {
+    return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
+  }
+
+  /**
+   * Приводит слово к указанной форме.
+   *
+   * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
+   *  согласовать данный.
+   * @param {Array|Object} grammemes Граммемы, по которым нужно согласовать слово.
+   * @returns {Parse|False} Разбор, соответствующий указанной форме или False,
+   *  если произвести согласование не удалось.
+   * @see Tag.matches
+   */
+  Parse.prototype.inflect = function(tag, grammemes) {
+    return this;
+  }
+
+  /**
+   * Проверяет, согласуется ли текущая форма слова с указанной.
+   *
+   * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
+   *  проверить согласованность.
+   * @param {Array|Object} grammemes Граммемы, по которым нужно проверить
+   *  согласованность.
+   * @returns {boolean} Является ли текущая форма слова согласованной с указанной.
+   * @see Tag.matches
+   */
+  Parse.prototype.matches = function(tag, grammemes) {
+    return this.tag.matches(tag, grammemes);
+  }
+
+  /**
+   * Возвращает текущую форму слова.
+   *
+   * @returns {String} Текущая форма слова.
+   */
+  Parse.prototype.toString = function() {
+    return this.word;
+  }
+
+  // Выводит информацию о слове в консоль.
+  Parse.prototype.log = function() {
+    console.group(this.word + this.suffix);
+    console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
+    console.log(this.tag.ext.toString());
+    console.groupEnd();
+  }
+
+  function lookupWord(word, config) {
+    var entries;
+    if (config.typos == 'auto') {
+      entries = words.findAll(word, config.replacements, config.stutter, 0);
+      if (!entries.length && word.length > 4) {
+        entries = words.findAll(word, config.replacements, config.stutter, 1);
+        if (!results.length && word.length > 9) {
+          entries = words.findAll(word, config.replacements, config.stutter, 2);
+        }
+      }
+    } else {
+      entries = words.findAll(word, config.replacements, config.stutter, config.typos);
+    }
+    return entries;
+  }
+
+  function getDictionaryScore(stutterCnt, typosCnt) {
+    // = 1.0 if no stutter/typos
+    // = 0.5 if any number of stutter or 1 typo
+    // = 0.25 if 2 typos
+    // = 0.125 if 3 typos
+    return Math.pow(0.5, Math.min(stutterCnt, 1) + typosCnt);
+  }
+
+  var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt) {
+    this.word = word;
     this.paradigmIdx = paradigmIdx;
     this.paradigm = paradigms[paradigmIdx];
-    var len = this.paradigm.length / 3;
     this.formIdx = formIdx;
-    this.tag = tags[this.paradigm[len + formIdx]];
-    this.stutterCnt = stutterCnt;
-    this.typosCnt = typosCnt;
+    this.tag = tags[this.paradigm[(this.paradigm.length / 3) + formIdx]];
+    this.stutterCnt = stutterCnt || 0;
+    this.typosCnt = typosCnt || 0;
+    this.score = getDictionaryScore(stutterCnt, typosCnt);
+    this.suffix = '';
   }
+
+  DictionaryParse.prototype = Object.create(Parse.prototype);
+  DictionaryParse.prototype.constructor = DictionaryParse;
+
   // Возвращает основу слова
-  Word.prototype.base = function() {
+  DictionaryParse.prototype.base = function() {
     if (this._base) {
       return this._base;
     }
     var len = this.paradigm.length / 3;
-    return this._base = this.val.substring(prefixes[this.paradigm[(len << 1) + this.formIdx]].length, this.val.length - suffixes[this.paradigm[this.formIdx]].length);
+    return (this._base = this.word.substring(
+      prefixes[this.paradigm[(len << 1) + this.formIdx]].length,
+      this.word.length - suffixes[this.paradigm[this.formIdx]].length)
+    );
   }
-  // Приводит к начальной форме. Аргумент keepPOS=true нужен, если требуется не менять часть речи при нормализации (например, не делать из причастия инфинитив).
-  // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
-  Word.prototype.normalize = function(keepPOS) {
-    return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
-  }
+
   // Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
   // Всегда выбирается первый подходящий вариант.
-  Word.prototype.inflect = function(tag, grammemes) {
+  DictionaryParse.prototype.inflect = function(tag, grammemes) {
     var len = this.paradigm.length / 3;
     if (!grammemes && typeof tag === 'number') {
       // Inflect to specific formIdx
-      return [prefixes[this.paradigm[(len << 1) + tag]] + this.base() + suffixes[this.paradigm[tag]], tags[this.paradigm[len + tag]]];
+      return new Parse(
+          prefixes[this.paradigm[(len << 1) + tag]] +
+          this.base() +
+          suffixes[this.paradigm[tag]] +
+          this.suffix,
+        tags[this.paradigm[len + tag]]
+      );
     }
 
     for (var formIdx = 0; formIdx < len; formIdx++) {
       if (tags[this.paradigm[len + formIdx]].matches(tag, grammemes)) {
-        return [prefixes[this.paradigm[(len << 1) + formIdx]] + this.base() + suffixes[this.paradigm[formIdx]], tags[this.paradigm[len + formIdx]]];
+        return new Parse(
+            prefixes[this.paradigm[(len << 1) + formIdx]] +
+            this.base() +
+            suffixes[this.paradigm[formIdx]] +
+            this.suffix,
+          tags[this.paradigm[len + formIdx]]
+        );
       }
     }
 
     return false;
   }
-  // Аналогично Tag.prototype.matches.
-  Word.prototype.matches = function(tag, grammemes) {
-    return this.tag.matches(tag, grammemes);
-  }
-  // Выводит информацию о слове в консоль.
-  Word.prototype.log = function() {
+
+  DictionaryParse.prototype.log = function() {
     var len = this.paradigm.length / 3;
-    console.group(this.val);
+    console.group(this.word + this.suffix);
     console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
     console.log(prefixes[this.paradigm[(len << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
     console.log(this.tag.ext.toString());
@@ -554,44 +838,222 @@
     console.groupEnd();
   }
 
-  var Morph = function(word, config) {
-    config = config || defaults;
-
-    for (var k in defaults) {
-      if (!(k in config)) {
-        config[k] = defaults[k];
-      }
-    }
-
-    var opts;
-    if (config.typos == 'auto') {
-      opts = words.findAll(word, config.replacements, config.stutter, 0);
-      if (!opts.length && word.length > 4) {
-        opts = words.findAll(word, config.replacements, config.stutter, 1);
-        if (!opts.length && word.length > 9) {
-          opts = words.findAll(word, config.replacements, config.stutter, 2);
-        }
-      }
-    } else {
-      opts = words.findAll(word, config.replacements, config.stutter, config.typos);
-    }
-
-    var vars = [];
-    //console.log(opts);
-    for (var i = 0; i < opts.length; i++) {
-      for (var j = 0; j < opts[i][1].length; j++) {
-        var word = new Word(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
-        //word.log();
-        vars.push(word);
-      }
-    }
-    return vars;
+  DictionaryParse.prototype.toString = function() {
+    return this.word + this.suffix;
   }
 
+  __init.push(function() {
+    Morph.Parsers.Dictionary = function(word, config) {
+      word = word.toLocaleLowerCase();
+
+      var opts = lookupWord(word, config);
+
+      var vars = [];
+      for (var i = 0; i < opts.length; i++) {
+        for (var j = 0; j < opts[i][1].length; j++) {
+          var w = new DictionaryParse(
+            opts[i][0],
+            opts[i][1][j][0],
+            opts[i][1][j][1],
+            opts[i][2],
+            opts[i][3]);
+          vars.push(w);
+        }
+      }
+      return vars;
+    }
+
+    var InitialsParser = function(isPatronymic, score) {
+      var initialsTags = [];
+      for (var i = 0; i < 1; i++) {
+        for (var j = 0; j < 6; j++) {
+          initialsTags.push(makeTag(
+            'NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
+            'СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
+          ));
+        }
+      }
+      return function(word, config) {
+        if (word.length != 1) {
+          return [];
+        }
+        if (config.ignoreCase) {
+          word = word.toLocaleUpperCase();
+        }
+        if (initials.indexOf(word) == -1) {
+          return [];
+        }
+        var vars = [];
+        for (var i = 0; i < initialsTags.length; i++) {
+          var w = new Parse(word, initialsTags[i], score);
+          vars.push(w);
+        }
+        return vars;
+      }
+    }
+
+    Morph.Parsers.AbbrName = InitialsParser(false, 0.1);
+    Morph.Parsers.AbbrPatronymic = InitialsParser(true, 0.1);
+
+    var RegexpParser = function(regexp, tag, score) {
+      return function(word, config) {
+        if (config.ignoreCase) {
+          word = word.toLocaleUpperCase();
+        }
+        if (word.length && word.match(regexp)) {
+          return [new Parse(word, tag)];
+        } else {
+          return [];
+        }
+      }
+    }
+
+    grammemes['NUMB'] = grammemes['ЧИСЛО'] =
+    grammemes['ROMN'] = grammemes['РИМ'] =
+    grammemes['LATN'] = grammemes['ЛАТ'] =
+    grammemes['PNCT'] = grammemes['ЗПР'] =
+    grammemes['UNKN'] = grammemes['НЕИЗВ'] =
+     { parent: 'POST' };
+
+    Morph.Parsers.IntNumber = RegexpParser(
+      /^[−-]?[0-9]+$/,
+      makeTag('NUMB,intg', 'ЧИСЛО,цел'), 0.9);
+
+    Morph.Parsers.RealNumber = RegexpParser(
+      /^[−-]?([0-9]*[.,][0-9]+)$/,
+      makeTag('NUMB,real', 'ЧИСЛО,вещ'), 0.9);
+
+    Morph.Parsers.Punctuation = RegexpParser(
+      /^[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^_`{|}~]+$/,
+      makeTag('PNCT', 'ЗПР'), 0.9);
+
+    Morph.Parsers.RomanNumber = RegexpParser(
+      /^M{0,4}(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/,
+      makeTag('ROMN', 'РИМ'), 0.9);
+
+    Morph.Parsers.Latin = RegexpParser(
+      /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]/,
+      makeTag('LATN', 'ЛАТ'), 0.9);
+
+    // слово + частица
+    // смотри-ка
+    Morph.Parsers.HyphenParticle = function(word, config) {
+      word = word.toLocaleLowerCase();
+
+      var vars = [];
+      for (var k = 0; k < particles.length; k++) {
+        if (word.substr(word.length - particles[k].length) == particles[k]) {
+          var base = word.slice(0, -particles[k].length);
+          var opts = lookupWord(base, config);
+
+          //console.log(opts);
+          for (var i = 0; i < opts.length; i++) {
+            for (var j = 0; j < opts[i][1].length; j++) {
+              var w = new DictionaryParse(
+                opts[i][0],
+                opts[i][1][j][0],
+                opts[i][1][j][1],
+                opts[i][2],
+                opts[i][3]);
+              w.score *= 0.9;
+              w.suffix = particles[k];
+              vars.push(w);
+            }
+          }
+        }
+      }
+
+      return vars;
+    }
+
+    var ADVB = makeTag('ADVB', 'Н');
+
+    // 'по-' + прилагательное в дательном падеже
+    // по-западному
+    Morph.Parsers.HyphenAdverb = function(word, config) {
+      word = word.toLocaleLowerCase();
+
+      if ((word.length < 5) || (word.substr(0, 3) != 'по-')) {
+        return [];
+      }
+
+      var opts = lookupWord(word.substr(3), config);
+
+      var vars = [];
+      var used = {};
+
+      for (var i = 0; i < opts.length; i++) {
+        if (!used[opts[i][0]]) {
+          for (var j = 0; j < opts[i][1].length; j++) {
+            var w = new DictionaryParse(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+            if (w.matches(['ADJF', 'sing', 'datv'])) {
+              used[opts[i][0]] = true;
+
+              w = new Parse(word, ADVB, w.score * 0.7, opts[i][2], opts[i][3]);
+              vars.push(w);
+              break;
+            }
+          }
+        }
+      }
+      return vars;
+    }
+
+    // слово + '-' + слово
+    // интернет-магазин
+    // компания-производитель
+    Morph.Parsers.HyphenWords = function(word, config) {
+      var parts = word.toLocaleLowerCase().split('-');
+      if (parts.length != 2) {
+        return [];
+      }
+
+      return [];
+    }
+
+
+    Morph.Parsers.PrefixKnown = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    Morph.Parsers.PrefixUnknown = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    Morph.Parsers.SuffixKnown = function(word, config) {
+      // TODO
+      return [];
+    }
+
+    var UNKN = makeTag('UNKN', 'НЕИЗВ');
+
+    Morph.Parsers.Unknown = function(word, config) {
+      return [new Parse(word.toLocaleLowerCase(), UNKN)];
+    }
+  });
+
+  /**
+   * Задает опции морфологического анализатора по умолчанию.
+   *
+   * @param {Object} config Опции анализатора.
+   * @see Morph
+   */
   Morph.setDefaults = function(config) {
     defaults = config;
   }
 
+  /**
+   * Инициализирует анализатор, загружая необходимые для работы словари из
+   * указанной директории. Эту функцию необходимо вызвать (и дождаться
+   * срабатывания коллбэка) до любых действий с модулем.
+   *
+   * @param {string} [path] Директория, содержащая файлы 'words.dawg',
+   * 'grammemes.json' и т.д. По умолчанию директория 'dicts' в данном модуле.
+   * @param {callback} callback Коллбэк, вызываемый после завершения загрузки
+   *  всех словарей.
+   */
   Morph.init = function(path, callback) {
     var loading = 0;
     var tagsInt, tagsExt;
@@ -603,7 +1065,19 @@
           tags[i].ext = new Tag(tagsExt[i]);
         }
         tags = deepFreeze(tags);
+        for (var i = 0; i < __init.length; i++) {
+          __init[i]();
+        }
         callback && callback(null, Morph);
+      }
+    }
+
+    if (!callback && typeof path == 'function') {
+      callback = path;
+      if (typeof __dirname == 'string') {
+        path = __dirname + '/../dicts';
+      } else {
+        path = 'dicts';
       }
     }
 
@@ -679,6 +1153,7 @@
 
   return Morph;
 }));
+
 ;(function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Syntax = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.Syntax', ['Az'], factory) :
@@ -706,35 +1181,103 @@
     emails: true,
     links: {
       protocols: true,
-      www: true,
+      www: false,
       tlds: {}
     }
   };
   /* TODO: add more named HTML entities */
-  var HTML_ENTITIES = { nbsp: ' ', quot: '"', gt: '>', lt: '<', amp: '&' };
+  var HTML_ENTITIES = { nbsp: ' ', quot: '"', gt: '>', lt: '<', amp: '&', ndash: '–' };
 
   for (var i = 0; i < TLDs.length; i++) {
     defaults.links.tlds[TLDs[i]] = true;
   }
 
-  // Start splitting text into tokens
-  // Returns a context, use `done` method to retrieve result
+  /**
+   * Токен, соответствующий некоторой подстроке в представленном на вход тексте.
+   * @typedef {Object} Token
+   * @property {string} type Тип токена.
+   * @property {string} subType Подтип токена.
+   * @property {number} st Индекс первого символа, входящего в токен.
+   * @property {number} en Индекс последнего символа, входящего в токен.
+   * @property {number} length Длина токена.
+   * @property {boolean} firstUpper True, если первый символ токена является заглавной буквой.
+   * @property {boolean} allUpper True, если все символы в токене являются заглавными буквами.
+   */
+
+  /**
+   * Создает токенизатор текста с заданными опциями.
+   *
+   * @playground
+   * var Az = require('az');
+   * var tokens = Az.Tokens('Текст (от лат. textus — «ткань; сплетение, связь, паутина, сочетание») — зафиксированная на каком-либо материальном носителе человеческая мысль; в общем плане связная и полная последовательность символов.');
+   * tokens.done();
+   * @constructor
+   * @param {string} [text] Строка для разбивки на токены.
+   * @param {Object} [config] Опции, применяемые при разбивке.
+   * @param {boolean} [config.html=False] Распознавать и выделять в отдельные
+   *  токены (типа TAG) HTML-теги. Кроме того, содержимое тегов &lt;style&gt;
+   *  и &lt;script&gt; будет размечено как единый токен типа CONTENT.
+   * @param {boolean} [config.wiki=False] Распознавать и выделять в отдельные
+   *  токены элементы вики-разметки.
+   * @param {boolean} [config.markdown=False] Распознавать и выделять в отдельные
+   *  токены элементы Markdown-разметки.
+   * @param {boolean} [config.hashtags=True] Распознавать и выделять в отдельные
+   *  токены хэштеги (строки, начинающиеся с символа «#»).
+   * @param {boolean} [config.mentions=True] Распознавать и выделять в отдельные
+   *  токены упоминания (строки, начинающиеся с символа «@»).
+   * @param {boolean} [config.emails=True] Распознавать и выделять в отдельные
+   *  токены е-мейлы (нет, распознавание всех корректных по RFC адресов не
+   *  гарантируется).
+   * @param {Object} [config.links] Настройки распознавания ссылок. False, чтобы
+   *  не распознавать ссылки совсем.
+   * @param {boolean} [config.links.protocols=True] Распознавать и выделять в отдельные
+   *  токены ссылки с указанным протоколом (http://, https:// и вообще любым другим).
+   * @param {boolean} [config.links.www=False] Распознавать и выделять в отдельные
+   *  токены ссылки, начинающиеся с «www.».
+   * @param {Object} [config.links.tlds] Объект, в котором ключами должны быть
+   *  домены верхнего уровня, в которых будут распознаваться ссылки. По умолчанию
+   *  текущий список всех таких доменов.
+   * @memberof Az
+   */
   var Tokens = function(text, config) {
     if (this instanceof Tokens) {
       this.tokens = [];
-      this.config = config || defaults;
-      this.append(text);
+      if (typeof text == 'string') {
+        this.config = config || defaults;
+        this.append(text);
+      } else {
+        this.config = text || defaults;
+      }
       this.index = -1;
     } else {
-      return new Tokens(text);
+      return new Tokens(text, config);
     }
   }
 
-  // Adds more text content
+  /**
+   * Отправляет ещё один кусок текста на токенизацию. Таким образом вполне
+   * допустимо обрабатывать большие документы частями, многократно вызывая этот
+   * метод. При этом токен может начаться в одной части и продолжиться в
+   * следующей (а закончиться в ещё одной).
+   *
+   * @param {string} text Строка для разбивки на токены.
+   * @param {Object} [config] Опции, применяемые при разбивке. Перекрывают
+   *  опции, заданные в конструкторе токенизатора.
+   * @see Tokens
+   */
   Tokens.prototype.append = function(text, config) {
     // TODO: get rid of 's' field (storing a copy of token)
     // st + len + en should be enough (check that they are always correct)
     config = config || this.config;
+    for (var k in defaults) {
+      if (!(k in config)) {
+        config[k] = defaults[k];
+      }
+    }
+    if (config.links && config.links.tlds === true) {
+      config.links.tlds = defaults.links.tlds;
+    }
+
     for (var i = 0; i < text.length; i++) {
       var ch = text.charAt(i);
       var code = text.charCodeAt(i);
@@ -862,7 +1405,7 @@
 
         // Process next char (start new token or append to the previous one)
         if (token.type == 'LINK') {
-          if (charType != 'SPACE' && ch != ',') {
+          if (charType != 'SPACE' && ch != ',' && ch != '<') {
             append = true;
           }
         } else
@@ -897,8 +1440,15 @@
           if (ch == '"' || ch == '\'') {
             token.quote = ch;
           } else
-          if (ch == '<') {
-            append = false;
+          if (ch == '>') {
+            if (token.s.substr(-8) == '</script') {
+              token.s = token.s.substr(0, token.s.length - 8);
+
+              append = false;
+              ch = '</script>';
+              tokenType = 'TAG';
+              tokenSubType = 'CLOSING';
+            }
           }
         } else
         if (token.type == 'TAG' && ch != '<' && token.s.substr(1, 6).toLowerCase() == 'script') {
@@ -1131,6 +1681,15 @@
     return this;
   }
 
+  /**
+   * Завершает токенизацию, возвращая список токенов.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  отфильтровать результат.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Token[]} Список токенов после фильтрации.
+   */
   Tokens.prototype.done = function(filter, exclude) {
     // Finalize tokenizing, return list of tokens
     // For now it just returns tokens, in the future there could be some additional work
@@ -1146,7 +1705,16 @@
     return list;
   }
 
-  Tokens.prototype.countTokens = function(filter, exclude) {
+  /**
+   * Подсчитывает текущее количество токенов.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  отфильтровать результат.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. подсчитываются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Number} Число токенов после фильтрации.
+   */
+  Tokens.prototype.count = function(filter, exclude) {
     if (!skipSpace && !skipPunct) {
       return this.tokens.length;
     }
@@ -1159,6 +1727,19 @@
     return count;
   }
 
+  /**
+   * Получает следующий токен относительно текущей позиции.
+   *
+   * @param {boolean} moveIndex Следует ли переместить указатель к
+   *  следующему токену (в противном случае следующий вызов nextToken вернет
+   *  тот же результат)
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Token|null} Следующий токен или null, если подходящих токенов
+   *  впереди нет.
+   */
   Tokens.prototype.nextToken = function(moveIndex, filter, exclude) {
     var index = this.index;
     index++;
@@ -1174,11 +1755,31 @@
     return null;
   }
 
+  /**
+   * Проверяет, является ли следующий (за исключением пробелов) токен знаком
+   * препинания или нет.
+   *
+   * @returns {Token|False} False, если следующий токен не является знаком
+   *  препинания, либо сам токен в противном случае.
+   */
   Tokens.prototype.punctAhead = function() {
     var token = this.nextToken(false, ['SPACE'], true);
     return token && token.type == 'PUNCT' && token;
   }
 
+  /**
+   * Получает предыдущий токен относительно текущей позиции.
+   *
+   * @param {boolean} moveIndex Следует ли переместить указатель к
+   *  предыдущему токену (в противном случае следующий вызов prevToken вернет
+   *  тот же результат)
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {Token|null} Предыдущий токен или null, если подходящих токенов
+   *  позади нет.
+   */
   Tokens.prototype.prevToken = function(moveIndex, filter, exclude) {
     var index = this.index;
     index--;
@@ -1194,15 +1795,42 @@
     return null;
   }
 
+  /**
+   * Проверяет, является ли предыдущий (за исключением пробелов) токен знаком
+   * препинания или нет.
+   *
+   * @returns {Token|False} False, если предыдущий токен не является знаком
+   *  препинания, либо сам токен в противном случае.
+   */
   Tokens.prototype.punctBehind = function() {
     var token = this.prevToken(false, ['SPACE'], true);
     return token && token.type == 'PUNCT' && token;
   }
 
+  /**
+   * Проверяет, есть ли впереди текущей позиции токены, удовлетворяющие фильтру.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {boolean} True если впереди есть хотя бы один подходящий токен,
+   *  и False в противном случае.
+   */
   Tokens.prototype.hasTokensAhead = function(filter, exclude) {
     return this.nextToken(false, filter, exclude) != null;
   }
 
+  /**
+   * Проверяет, есть ли позади текущей позиции токены, удовлетворяющие фильтру.
+   *
+   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   *  итерироваться.
+   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
+   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @returns {boolean} True если позади есть хотя бы один подходящий токен,
+   *  и False в противном случае.
+   */
   Tokens.prototype.hasTokensBehind = function(filter, exclude) {
     return this.prevToken(false, filter, exclude) != null;
   }
