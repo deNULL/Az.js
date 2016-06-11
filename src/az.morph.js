@@ -404,10 +404,10 @@
 
   function getDictionaryScore(stutterCnt, typosCnt) {
     // = 1.0 if no stutter/typos
-    // = 0.25 if any number of stutter or 1 typo
-    // = 0.125 if 2 typos
-    // = 0.031 if 3 typos
-    return Math.pow(0.25, Math.min(stutterCnt, 1) + typosCnt);
+    // = 0.3 if any number of stutter or 1 typo
+    // = 0.09 if 2 typos
+    // = 0.027 if 3 typos
+    return Math.pow(0.3, Math.min(stutterCnt, 1) + typosCnt);
   }
 
   var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt, prefix, suffix) {
@@ -693,7 +693,7 @@
     // интернет-магазин
     // компания-производитель
     Morph.Parsers.HyphenWords = function(word, config) {
-      var word = word.toLocaleLowerCase();
+      word = word.toLocaleLowerCase();
       for (var i = 0; i < knownPrefixes.length; i++) {
         if (word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
           return [];
@@ -704,7 +704,7 @@
       if (parts.length != 2 || !parts[0].length || !parts[1].length) {
         if (parts.length > 2) {
           var end = parts[parts.length - 1];
-          var right = Morph(end, Az.extend(config, { forceParse: false }));
+          var right = Morph.Parsers.Dictionary(end, config);
           for (var j = 0; j < right.length; j++) {
             if (right[j] instanceof DictionaryParse) {
               right[j].score *= 0.2;
@@ -715,8 +715,8 @@
         }
         return parses;
       }
-      var left = Morph(parts[0], Az.extend(config, { forceParse: false, normalizeScore: false }));
-      var right = Morph(parts[1], Az.extend(config, { forceParse: false, normalizeScore: false }));
+      var left = Morph.Parsers.Dictionary(parts[0], config);
+      var right = Morph.Parsers.Dictionary(parts[1], config);
 
 
       // Variable
@@ -749,7 +749,7 @@
 
 
     Morph.Parsers.PrefixKnown = function(word, config) {
-      var word = word.toLocaleLowerCase();
+      word = word.toLocaleLowerCase();
       var parses = [];
       for (var i = 0; i < knownPrefixes.length; i++) {
         if (word.length - knownPrefixes[i].length < 3) {
@@ -758,12 +758,12 @@
 
         if (word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
           var end = word.substr(knownPrefixes[i].length);
-          var right = Morph(end, Az.extend(config, { forceParse: false, normalizeScore: false }));
+          var right = Morph.Parsers.Dictionary(end, config);
           for (var j = 0; j < right.length; j++) {
             if (!right[j].tag.isProductive()) {
               continue;
             }
-            right[j].score *= 0.75;
+            right[j].score *= 0.7;
             right[j].prefix = knownPrefixes[i];
             parses.push(right[j]);
           }
@@ -773,8 +773,25 @@
     }
 
     Morph.Parsers.PrefixUnknown = function(word, config) {
-      // TODO
-      return [];
+      //return [];
+      word = word.toLocaleLowerCase();
+      var parses = [];
+      for (var len = 1; len <= 5; len++) {
+        if (word.length - len < 3) {
+          break;
+        }
+        var end = word.substr(len);
+        var right = Morph.Parsers.Dictionary(end, config);
+        for (var j = 0; j < right.length; j++) {
+          if (!right[j].tag.isProductive()) {
+            continue;
+          }
+          right[j].score *= 0.3;
+          right[j].prefix = word.substr(0, len);
+          parses.push(right[j]);
+        }
+      }
+      return parses;
     }
 
     Morph.Parsers.SuffixKnown = function(word, config) {
