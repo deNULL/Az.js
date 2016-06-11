@@ -3,6 +3,7 @@
   typeof define === 'function' && define.amd ? define('Az.Morph', ['Az', 'Az.DAWG'], factory) :
   (global.Az = global.Az || {}) && (global.Az.Morph = factory(global.Az))
 }(this, function (Az) { 'use strict';
+  /** @namespace Az **/
   var words,
       probabilities,
       predictionSuffixes = new Array(3),

@@ -36,6 +36,7 @@
     "gulp": "^3.9.1",
     "gulp-concat": "^2.6.0",
     "gulp-filesize": "0.0.6",
+    "gulp-jsdoc-to-markdown": "^1.2.2",
     "gulp-rename": "^1.2.2",
     "gulp-sourcemaps": "^2.0.0-alpha",
     "gulp-uglify": "^1.5.3",
@@ -45,8 +46,13 @@
   },
   "config": {
     "blanket": {
-      "pattern": [ "" ],
-      "data-cover-never": [ "node_modules", "test" ]
+      "pattern": [
+        ""
+      ],
+      "data-cover-never": [
+        "node_modules",
+        "test"
+      ]
     }
   }
 }
