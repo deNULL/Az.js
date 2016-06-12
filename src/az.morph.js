@@ -47,6 +47,7 @@
         'теле', 'тетра', 'топ-', 'транс', 'транс-', 'ультра', 'унтер-', 'штаб-',
         'экзо', 'эко', 'эндо', 'эконом-', 'экс', 'экс-', 'экстра', 'экстра-', 'электро', 'энерго', 'этно'
       ],
+      autoTypos = [4, 9],
       UNKN,
       __init = [];
 
@@ -255,6 +256,7 @@
       if (name in Morph.Parsers) {
         var vars = Morph.Parsers[name](word, config);
         for (var j = 0; j < vars.length; j++) {
+          vars[j].parser = name;
           if (!vars[j].stutterCnt && !vars[j].typosCnt) {
             matched = true;
           }
@@ -275,23 +277,14 @@
 
     var total = 0;
     var probs = [];
-    var useProbs = false;
     for (var i = 0; i < parses.length; i++) {
       var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
       if (res && res[0]) {
-        probs.push((res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt));
-        useProbs = true;
-      } else {
-        probs.push(0);
+        parses[i].score = (res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt);
       }
       total += parses[i].score;
     }
 
-    if (useProbs) {
-      for (var i = 0; i < parses.length; i++) {
-        parses[i].score = probs[i];
-      }
-    } else
     if (total > 0 && config.normalizeScore) {
       for (var i = 0; i < parses.length; i++) {
         parses[i].score /= total;
@@ -386,18 +379,15 @@
     console.groupEnd();
   }
 
-  function lookupWord(word, config) {
+  function lookup(dawg, word, config) {
     var entries;
     if (config.typos == 'auto') {
-      entries = words.findAll(word, config.replacements, config.stutter, 0);
-      if (!entries.length && word.length > 4) {
-        entries = words.findAll(word, config.replacements, config.stutter, 1);
-        if (!entries.length && word.length > 9) {
-          entries = words.findAll(word, config.replacements, config.stutter, 2);
-        }
+      entries = dawg.findAll(word, config.replacements, config.stutter, 0);
+      for (var i = 0; i < autoTypos.length && !entries.length && word.length > autoTypos[i]; i++) {
+        entries = dawg.findAll(word, config.replacements, config.stutter, i + 1);
       }
     } else {
-      entries = words.findAll(word, config.replacements, config.stutter, config.typos);
+      entries = dawg.findAll(word, config.replacements, config.stutter, config.typos);
     }
     return entries;
   }
@@ -521,9 +511,6 @@
     if (left && right) {
       return new CombinedParse(left, right);
     } else {
-      console.log('Impossible to inflect both:');
-      console.log(tag, grammemes);
-      console.log(right, right.tag);
       return false;
     }
   }
@@ -536,7 +523,7 @@
     Morph.Parsers.Dictionary = function(word, config) {
       word = word.toLocaleLowerCase();
 
-      var opts = lookupWord(word, config);
+      var opts = lookup(words, word, config);
 
       var vars = [];
       for (var i = 0; i < opts.length; i++) {
@@ -634,7 +621,7 @@
       for (var k = 0; k < particles.length; k++) {
         if (word.substr(word.length - particles[k].length) == particles[k]) {
           var base = word.slice(0, -particles[k].length);
-          var opts = lookupWord(base, config);
+          var opts = lookup(words, base, config);
 
           //console.log(opts);
           for (var i = 0; i < opts.length; i++) {
@@ -667,7 +654,7 @@
         return [];
       }
 
-      var opts = lookupWord(word.substr(3), config);
+      var opts = lookup(words, word.substr(3), config);
 
       var parses = [];
       var used = {};
@@ -679,7 +666,7 @@
             if (parse.matches(['ADJF', 'sing', 'datv'])) {
               used[opts[i][0]] = true;
 
-              parse = new Parse(word, ADVB, w.score * 0.7, opts[i][2], opts[i][3]);
+              parse = new Parse('по-' + opts[i][0], ADVB, parse.score * 0.9, opts[i][2], opts[i][3]);
               parses.push(parse);
               break;
             }
@@ -773,7 +760,6 @@
     }
 
     Morph.Parsers.PrefixUnknown = function(word, config) {
-      //return [];
       word = word.toLocaleLowerCase();
       var parses = [];
       for (var len = 1; len <= 5; len++) {
@@ -795,8 +781,58 @@
     }
 
     Morph.Parsers.SuffixKnown = function(word, config) {
-      // TODO
-      return [];
+      if (word.length < 4) {
+        return [];
+      }
+      word = word.toLocaleLowerCase();
+      var parses = [];
+      for (var i = 0; i < prefixes.length; i++) {
+        if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
+          continue;
+        }
+        var max = 1;
+        var base = word.substr(prefixes[i].length);
+        for (var len = 5; len >= 1; len--) {
+          if (len >= base.length) {
+            continue;
+          }
+          var left = base.substr(0, base.length - len);
+          var right = base.substr(base.length - len);
+          var entries = predictionSuffixes[i].findAll(right, config.replacements, 0, 0);
+          if (!entries) {
+            continue;
+          }
+
+          var p = [];
+          for (var j = 0; j < entries.length; j++) {
+            var suffix = entries[j][0];
+            var stats = entries[j][1];
+
+            for (var k = 0; k < stats.length; k++) {
+              var parse = new DictionaryParse(
+                prefixes[i] + left + suffix,
+                stats[k][1],
+                stats[k][2]);
+              // Why there is even non-productive forms in suffix DAWGs?
+              if (!parse.tag.isProductive()) {
+                continue;
+              }
+              // TODO: ignore duplicates
+              max = Math.max(max, stats[k][0]);
+              parse.score = stats[k][0] * 0.5;
+              p.push(parse);
+            }
+          }
+          if (p.length > 0) {
+            for (var j = 0; j < p.length; j++) {
+              p[j].score /= max;
+            }
+            parses = parses.concat(p);
+            break;
+          }
+        }
+      }
+      return parses;
     }
 
     UNKN = makeTag('UNKN', 'НЕИЗВ');
