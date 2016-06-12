@@ -101,13 +101,8 @@
   Tokens.prototype.append = function(text, config) {
     // TODO: get rid of 's' field (storing a copy of token)
     // st + len + en should be enough (check that they are always correct)
-    config = config || this.config;
-    for (var k in defaults) {
-      if (!(k in config)) {
-        config[k] = defaults[k];
-      }
-    }
-    if (config.links && config.links.tlds === true) {
+    config = config ? Az.extend(defaults, config) : defaults;
+    if (config.links && (config.links.tlds === true)) {
       config.links.tlds = defaults.links.tlds;
     }
 
