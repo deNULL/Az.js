@@ -183,6 +183,10 @@
       this.UNKN);
   }
 
+  Tag.prototype.isCapitalized = function() {
+    return this.Name || this.Surn || this.Patr || this.Geox || this.Init;
+  }
+
   function makeTag(tagInt, tagExt) {
     var tag = new Tag(tagInt);
     tag.ext = new Tag(tagExt);
@@ -346,6 +350,47 @@
    */
   Parse.prototype.inflect = function(tag, grammemes) {
     return this;
+  }
+
+  /**
+   * Приводит слово к форме, согласующейся с указанным числом.
+   * Вместо конкретного числа можно указать категорию (согласно http://www.unicode.org/cldr/charts/29/supplemental/language_plural_rules.html).
+   *
+   * @param {number|string} number Число, с которым нужно согласовать данное слово или категория, описывающая правило построения множественного числа.
+   * @returns {Parse|False} Разбор, соответствующий указанному числу или False,
+   *  если произвести согласование не удалось.
+   */
+  Parse.prototype.pluralize = function(number) {
+    if (!this.tag.NOUN && !this.tag.ADJF && !this.tag.PRTF) {
+      return this;
+    }
+
+    if (typeof number == 'number') {
+      number = number % 100;
+      if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
+        number = 'many';
+      } else
+      if (number % 10 == 1) {
+        number = 'one';
+      } else {
+        number = 'few';
+      }
+    }
+
+    if (this.tag.NOUN && !this.tag.nomn && !this.tag.accs) {
+      return this.inflect([number == 'one' ? 'sing' : 'plur', this.tag.CAse]);
+    } else
+    if (number == 'one') {
+      return this.inflect(['sing', this.tag.nomn ? 'nomn' : 'accs'])
+    } else
+    if (this.tag.NOUN && (number == 'few')) {
+      return this.inflect(['sing', 'gent']);
+    } else
+    if ((this.tag.ADJF || this.tag.PRTF) && this.tag.femn && (number == 'few')) {
+      return this.inflect(['plur', 'nomn']);
+    } else {
+      return this.inflect(['plur', 'gent']);
+    }
   }
 
   /**
@@ -521,6 +566,10 @@
 
   __init.push(function() {
     Morph.Parsers.Dictionary = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
 
       var opts = lookup(words, word, config);
@@ -534,7 +583,9 @@
             opts[i][1][j][1],
             opts[i][2],
             opts[i][3]);
-          vars.push(w);
+          if (config.ignoreCase || !w.tag.isCapitalized() || isCapitalized) {
+            vars.push(w);
+          }
         }
       }
       return vars;
@@ -736,6 +787,10 @@
 
 
     Morph.Parsers.PrefixKnown = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
       for (var i = 0; i < knownPrefixes.length; i++) {
@@ -750,6 +805,9 @@
             if (!right[j].tag.isProductive()) {
               continue;
             }
+            if (!config.ignoreCase && right[j].tag.isCapitalized() && !isCapitalized) {
+              continue;
+            }
             right[j].score *= 0.7;
             right[j].prefix = knownPrefixes[i];
             parses.push(right[j]);
@@ -760,6 +818,10 @@
     }
 
     Morph.Parsers.PrefixUnknown = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
       for (var len = 1; len <= 5; len++) {
@@ -770,6 +832,9 @@
         var right = Morph.Parsers.Dictionary(end, config);
         for (var j = 0; j < right.length; j++) {
           if (!right[j].tag.isProductive()) {
+            continue;
+          }
+          if (!config.ignoreCase && right[j].tag.isCapitalized() && !isCapitalized) {
             continue;
           }
           right[j].score *= 0.3;
@@ -784,13 +849,16 @@
       if (word.length < 4) {
         return [];
       }
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
       for (var i = 0; i < prefixes.length; i++) {
         if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
           continue;
         }
-        var max = 1;
         var base = word.substr(prefixes[i].length);
         for (var len = 5; len >= 1; len--) {
           if (len >= base.length) {
@@ -804,6 +872,7 @@
           }
 
           var p = [];
+          var max = 1;
           for (var j = 0; j < entries.length; j++) {
             var suffix = entries[j][0];
             var stats = entries[j][1];
@@ -815,6 +884,9 @@
                 stats[k][2]);
               // Why there is even non-productive forms in suffix DAWGs?
               if (!parse.tag.isProductive()) {
+                continue;
+              }
+              if (!config.ignoreCase && parse.tag.isCapitalized() && !isCapitalized) {
                 continue;
               }
               // TODO: ignore duplicates
