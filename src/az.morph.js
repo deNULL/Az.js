@@ -280,18 +280,38 @@
     }
 
     var total = 0;
-    var probs = [];
     for (var i = 0; i < parses.length; i++) {
-      var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
-      if (res && res[0]) {
-        parses[i].score = (res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt);
+      if (parses[i].parser == 'Dictionary') {
+        var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
+        if (res && res[0]) {
+          parses[i].score = (res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt);
+          total += parses[i].score;
+        }
       }
-      total += parses[i].score;
     }
 
-    if (total > 0 && config.normalizeScore) {
+    // Normalize Dictionary & non-Dictionary scores separately
+    if (config.normalizeScore) {
+      if (total > 0) {
+        for (var i = 0; i < parses.length; i++) {
+          if (parses[i].parser == 'Dictionary') {
+            parses[i].score /= total;
+          }
+        }
+      }
+
+      total = 0;
       for (var i = 0; i < parses.length; i++) {
-        parses[i].score /= total;
+        if (parses[i].parser != 'Dictionary') {
+          total += parses[i].score;
+        }
+      }
+      if (total > 0) {
+        for (var i = 0; i < parses.length; i++) {
+          if (parses[i].parser != 'Dictionary') {
+            parses[i].score /= total;
+          }
+        }
       }
     }
 
