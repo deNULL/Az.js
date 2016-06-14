@@ -19,7 +19,7 @@
         typos: 0,
         parsers: [
           // Словарные слова + инициалы
-          'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
+          'Dictionary?', 'AbbrName?', 'AbbrPatronymic', 'Abbr?',
           // Числа, пунктуация, латиница (по-хорошему, токенизатор не должен эту ерунду сюда пускать)
           'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
           // Слова с дефисами
@@ -611,10 +611,58 @@
       return vars;
     }
 
+    var abbrTags = [];
+    for (var i = 0; i <= 2; i++) {
+      for (var j = 0; j <= 5; j++) {
+        for (var k = 0; k <= 1; k++) {
+          abbrTags.push(makeTag(
+            'NOUN,inan,' + ['masc', 'femn', 'neut'][i] + ',Fixd,Abbr ' + ['sing', 'plur'][k] + ',' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
+            'СУЩ,неод,' + ['мр', 'жр', 'ср'][i] + ',0,аббр ' + ['ед', 'мн'][k] + ',' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
+          ));
+        }
+      }
+    }
+
+    // Произвольные аббревиатуры (несклоняемые)
+    // ВК, ЖК, ССМО, ОАО, ЛенСпецСМУ
+    Morph.Parsers.Abbr = function(word, config) {
+      // Однобуквенные считаются инициалами и для них заведены отдельные парсеры
+      if (word.length < 2) {
+        return [];
+      }
+      // Первая буква должна быть заглавной: сокращения с маленькой буквы (типа iOS) мало распространены
+      // Последняя буква должна быть заглавной: иначе сокращение, вероятно, склоняется
+      if ((initials.indexOf(word[0]) > -1) && (initials.indexOf(word[word.length - 1]) && -1)) {
+        var vars = [];
+        for (var i = 0; i < abbrTags.length; i++) {
+          var w = new Parse(word, abbrTags[i], 0.8);
+          vars.push(w);
+        }
+        return vars;
+      }
+      // При игнорировании регистра разбираем только короткие аббревиатуры
+      // (и требуем, чтобы каждая буква была «инициалом», т.е. без мягких/твердых знаков)
+      if (!config.ignoreCase || (word.length > 5)) {
+        return [];
+      }
+      word = word.toLocaleUpperCase();
+      for (var i = 0; i < word.length; i++) {
+        if (initials.indexOf(word[i]) == -1) {
+          return [];
+        }
+      }
+      var vars = [];
+      for (var i = 0; i < abbrTags.length; i++) {
+        var w = new Parse(word, abbrTags[i], 0.2);
+        vars.push(w);
+      }
+      return vars;
+    }
+
     var InitialsParser = function(isPatronymic, score) {
       var initialsTags = [];
-      for (var i = 0; i < 1; i++) {
-        for (var j = 0; j < 6; j++) {
+      for (var i = 0; i <= 1; i++) {
+        for (var j = 0; j <= 5; j++) {
           initialsTags.push(makeTag(
             'NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
             'СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
