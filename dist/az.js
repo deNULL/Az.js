@@ -421,13 +421,13 @@
         typos: 0,
         parsers: [
           // Словарные слова + инициалы
-          'Dictionary?', 'AbbrName?', 'AbbrPatronymic?', 'Abbr',
+          'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
           // Числа, пунктуация, латиница (по-хорошему, токенизатор не должен эту ерунду сюда пускать)
           'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
           // Слова с дефисами
           'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
           // Предсказатели по префиксам/суффиксам
-          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown'
+          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown?', 'Abbr'
         ],
         forceParse: false,
         normalizeScore: true
@@ -1032,15 +1032,27 @@
       if (word.length < 2) {
         return [];
       }
+      // Дефисов в аббревиатуре быть не должно
+      if (word.indexOf('-') > -1) {
+        return [];
+      }
       // Первая буква должна быть заглавной: сокращения с маленькой буквы (типа iOS) мало распространены
       // Последняя буква должна быть заглавной: иначе сокращение, вероятно, склоняется
-      if ((initials.indexOf(word[0]) > -1) && (initials.indexOf(word[word.length - 1]) && -1)) {
-        var vars = [];
-        for (var i = 0; i < abbrTags.length; i++) {
-          var w = new Parse(word, abbrTags[i], 0.8);
-          vars.push(w);
+      if ((initials.indexOf(word[0]) > -1) && (initials.indexOf(word[word.length - 1]) > -1)) {
+        var caps = 0;
+        for (var i = 0; i < word.length; i++) {
+          if (initials.indexOf(word[i]) > -1) {
+            caps++;
+          }
         }
-        return vars;
+        if (caps <= 5) {
+          var vars = [];
+          for (var i = 0; i < abbrTags.length; i++) {
+            var w = new Parse(word, abbrTags[i], 0.5);
+            vars.push(w);
+          }
+          return vars;
+        }
       }
       // При игнорировании регистра разбираем только короткие аббревиатуры
       // (и требуем, чтобы каждая буква была «инициалом», т.е. без мягких/твердых знаков)
@@ -1130,7 +1142,7 @@
       makeTag('ROMN', 'РИМ'), 0.9);
 
     Morph.Parsers.Latin = RegexpParser(
-      /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]/,
+      /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]$/,
       makeTag('LATN', 'ЛАТ'), 0.9);
 
     // слово + частица
@@ -1797,7 +1809,8 @@
             (token.length == 1) &&
             (s[token.st] == "'") &&
             (last > 0) &&
-            (ts[last - 1].type === Tokens.WORD)) {
+            (ts[last - 1].type === Tokens.WORD) &&
+            (ts[last - 1].subType === Tokens.LATIN)) {
           ts[last - 1].length += token.length;
 
           last -= 1;
@@ -2046,15 +2059,19 @@
             token.type = Tokens.LINK;
           }
         } else
-        if (config.wiki && (ch == "'")) {
-          if ((token.length == 1) && (s[token.st] == "'")) {
+        if (config.wiki && (ch == "'") && (s[token.en()] == "'")) {
+          if (token.length > 1) {
+            token.length--;
+            st--;
+            tokenType = Tokens.MARKUP;
+          } else {
             append = true;
             token.type = Tokens.MARKUP;
-          } else {
-            tokenType = Tokens.PUNCT;
           }
         } else
-        if ((ch == '-') || (ch == '’') || (ch == "'")) {
+        if ((ch == '-') || 
+            ((token.subType == Tokens.LATIN) && 
+             ((ch == '’') || (ch == "'")))) {
           if (token.type === Tokens.WORD) {
             append = true;
           }
