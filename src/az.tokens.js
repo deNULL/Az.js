@@ -325,6 +325,13 @@
 
         // Process next char (start new token or append to the previous one)
         if (token.type === Tokens.LINK) {
+          if ((ch == ')') && 
+              (last >= 1) && 
+              (ts[last - 1].type === Tokens.MARKUP) &&
+              (ts[last - 1].length == 1) &&
+              (s[ts[last - 1].st] == '(')) {
+            tokenType = Tokens.MARKUP;
+          } else
           if ((charType !== Tokens.SPACE) && (ch != ',') && (ch != '<')) {
             append = true;
           }
