@@ -40,6 +40,15 @@
       };
 
       xhr.send(null);
+    },
+    extend: function() {
+      var result = {};
+      for (var i = 0; i < arguments.length; i++) {
+        for (var key in arguments[i]) {
+          result[key] = arguments[i][key];
+        }
+      }
+      return result;
     }
   };
 
@@ -76,6 +85,13 @@
     1035: 142, 1086: 238, 1087: 239, 1088: 240, 1089: 241, 1090: 242, 1036: 141, 1041: 193, 1091: 243, 1092: 244, 8224: 134, 1093: 245, 8470: 185, 1094: 246,
     1054: 206, 1095: 247, 1096: 248, 8249: 139, 1097: 249, 1098: 250, 1044: 196, 1099: 251, 1111: 191, 1055: 207, 1100: 252, 1038: 161, 8220: 147, 1101: 253,
     8250: 155, 1102: 254, 8216: 145, 1103: 255, 1043: 195, 1105: 184, 1039: 143, 1026: 128, 1106: 144, 8218: 130, 1107: 131, 8217: 146, 1108: 186, 1109: 190};
+
+  var UCS2 = {};
+  for (var k in CP1251) {
+    UCS2[CP1251[k]] = String.fromCharCode(k);
+    delete UCS2[0];
+    delete UCS2[1];
+  }
 
   // Based on all common ЙЦУКЕН-keyboards (both Windows and Apple variations)
   var COMMON_TYPOS = {
@@ -262,6 +278,18 @@
 
       // Done
       if (len == str.length) {
+        if (typos < mtypos && !stutter) {
+          // Allow missing letter(s) at the very end
+          var label = this.guide[index << 1]; // First child
+          do {
+            cur = this.followByte(label, index);
+            if ((cur != MISSING) && (label in UCS2)) {
+              prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
+            }
+            label = this.guide[(cur << 1) + 1]; // Next child
+          } while (cur != MISSING);
+        }
+
         if (this.format == 'int') {
           if (this.hasValue(index)) {
             results.push([prefix, this.value(index)]);
@@ -295,8 +323,18 @@
         // Skip a letter entirely (extra letter)
         prefixes.push([ prefix, len + 1, typos + 1, stutter, index ]);
 
-        // Add a letter (missing) - or - replace a letter
+        // Add a letter (missing)
         // TODO: iterate all childs?
+        var label = this.guide[index << 1]; // First child
+        do {
+          cur = this.followByte(label, index);
+          if ((cur != MISSING) && (label in UCS2)) {
+            prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
+          }
+          label = this.guide[(cur << 1) + 1]; // Next child
+        } while (cur != MISSING);
+
+        // Replace a letter
         // Now it checks only most probable typos (located near to each other on keyboards)
         var possible = COMMON_TYPOS[str[len]];
         if (possible) {
@@ -367,6 +405,7 @@
   typeof define === 'function' && define.amd ? define('Az.Morph', ['Az', 'Az.DAWG'], factory) :
   (global.Az = global.Az || {}) && (global.Az.Morph = factory(global.Az))
 }(this, function (Az) { 'use strict';
+  /** @namespace Az **/
   var words,
       probabilities,
       predictionSuffixes = new Array(3),
@@ -382,14 +421,16 @@
         typos: 0,
         parsers: [
           // Словарные слова + инициалы
-          'Dictionary?', 'AbbrName?', 'AbbrPatronymic',
+          'Dictionary?', 'AbbrName?', 'AbbrPatronymic?', 'Abbr',
           // Числа, пунктуация, латиница (по-хорошему, токенизатор не должен эту ерунду сюда пускать)
           'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
           // Слова с дефисами
           'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
           // Предсказатели по префиксам/суффиксам
-          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown', 'Unknown'
-        ]
+          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown'
+        ],
+        forceParse: false,
+        normalizeScore: true
       },
       initials = 'АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЭЮЯ',
       particles = ['-то', '-ка', '-таки', '-де', '-тко', '-тка', '-с', '-ста'],
@@ -408,6 +449,8 @@
         'теле', 'тетра', 'топ-', 'транс', 'транс-', 'ультра', 'унтер-', 'штаб-',
         'экзо', 'эко', 'эндо', 'эконом-', 'экс', 'экс-', 'экстра', 'экстра-', 'электро', 'энерго', 'этно'
       ],
+      autoTypos = [4, 9],
+      UNKN,
       __init = [];
 
   // Взято из https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
@@ -445,17 +488,17 @@
   var Tag = function(str) {
     var par, pair = str.split(' ');
     this.stat = pair[0].split(',');
-    for (var i = 0; i < this.stat.length; i++) {
-      this[this.stat[i]] = true;
-      if (grammemes[this.stat[i]] && (par = grammemes[this.stat[i]].parent)) {
-        this[par] = this.stat[i];
-      }
-    }
     this.flex = pair[1] ? pair[1].split(',') : [];
-    for (var i = 0; i < this.flex.length; i++) {
-      this[this.flex[i]] = true;
-      if (grammemes[this.flex[i]] && (par = grammemes[this.flex[i]].parent)) {
-        this[par] = this.flex[i];
+    for (var j = 0; j < 2; j++) {
+      var grams = this[['stat', 'flex'][j]];
+      for (var i = 0; i < grams.length; i++) {
+        var gram = grams[i];
+        this[gram] = true;
+        // loc2 -> loct -> CAse
+        while (grammemes[gram] && (par = grammemes[gram].parent)) {
+          this[par] = gram;
+          gram = par;
+        }
       }
     }
     if ('POST' in this) {
@@ -528,10 +571,22 @@
     // Match to another tag
     for (var i = 0; i < grammemes.length; i++) {
       if (tag[grammemes[i]] != this[grammemes[i]]) {
+        // Special case: tag.CAse
         return false;
       }
     }
     return true;
+  }
+
+  Tag.prototype.isProductive = function() {
+    return !(this.NUMR || this.NPRO || this.PRED || this.PREP ||
+      this.CONJ || this.PRCL || this.INTJ || this.Apro ||
+      this.NUMB || this.ROMN || this.LATN || this.PNCT ||
+      this.UNKN);
+  }
+
+  Tag.prototype.isCapitalized = function() {
+    return this.Name || this.Surn || this.Patr || this.Geox || this.Init;
   }
 
   function makeTag(tagInt, tagExt) {
@@ -546,7 +601,7 @@
    *
    * @playground
    * var Az = require('az');
-   * Az.Morph(function() {
+   * Az.Morph.init(function() {
    *   console.log(Az.Morph('стали'));
    * });
    * @param {string} word Слово, которое следует разобрать.
@@ -569,10 +624,10 @@
    * опечаток в слове.
    *
    *  Опечаткой считается:
-   *   - лишняя буква в слове
-   *   - (пропущенная буква в слове) (TODO: пока не работает)
-   *   - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
-   *   - переставленные местами соседние буквы
+   *  - лишняя буква в слове
+   *  - пропущенная буква в слове (TODO: самый медленный тип опечаток, стоит сделать опциональным)
+   *  - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
+   *  - переставленные местами соседние буквы
    *
    *  0 или false чтобы отключить.
    *
@@ -590,17 +645,13 @@
    *  парсеры либо не дали результата совсем, либо дали только с опечатками.
    *
    *  (парсер в терминологии pymorphy2 — анализатор)
+   * @param {boolean} [config.forceParse=False] Всегда возвращать хотя бы один вариант
+   *  разбора (как это делает pymorphy2), даже если совсем ничего не получилось.
    * @returns {Parse[]} Варианты разбора.
    * @memberof Az
    */
   var Morph = function(word, config) {
-    config = config || defaults;
-
-    for (var k in defaults) {
-      if (!(k in config)) {
-        config[k] = defaults[k];
-      }
-    }
+    config = config ? Az.extend(defaults, config) : defaults;
 
     var parses = [];
     var matched = false;
@@ -611,6 +662,7 @@
       if (name in Morph.Parsers) {
         var vars = Morph.Parsers[name](word, config);
         for (var j = 0; j < vars.length; j++) {
+          vars[j].parser = name;
           if (!vars[j].stutterCnt && !vars[j].typosCnt) {
             matched = true;
           }
@@ -625,28 +677,43 @@
       }
     }
 
-    var total = 0;
-    var probs = [];
-    var useProbs = false;
-    for (var i = 0; i < parses.length; i++) {
-      var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
-      if (res && res[0]) {
-        probs.push(res[0][1] / 1000000);
-        useProbs = true;
-      } else {
-        probs.push(0);
-      }
-      total += parses[i].score;
+    if (!parses.length && config.forceParse) {
+      parses.push(new Parse(word.toLocaleLowerCase(), UNKN));
     }
 
-    if (useProbs) {
-      for (var i = 0; i < parses.length; i++) {
-        parses[i].score = probs[i];
+    var total = 0;
+    for (var i = 0; i < parses.length; i++) {
+      if (parses[i].parser == 'Dictionary') {
+        var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
+        if (res && res[0]) {
+          parses[i].score = (res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt);
+          total += parses[i].score;
+        }
       }
-    } else
-    if (total > 0) {
+    }
+
+    // Normalize Dictionary & non-Dictionary scores separately
+    if (config.normalizeScore) {
+      if (total > 0) {
+        for (var i = 0; i < parses.length; i++) {
+          if (parses[i].parser == 'Dictionary') {
+            parses[i].score /= total;
+          }
+        }
+      }
+
+      total = 0;
       for (var i = 0; i < parses.length; i++) {
-        parses[i].score /= total;
+        if (parses[i].parser != 'Dictionary') {
+          total += parses[i].score;
+        }
+      }
+      if (total > 0) {
+        for (var i = 0; i < parses.length; i++) {
+          if (parses[i].parser != 'Dictionary') {
+            parses[i].score /= total;
+          }
+        }
       }
     }
 
@@ -708,6 +775,47 @@
   }
 
   /**
+   * Приводит слово к форме, согласующейся с указанным числом.
+   * Вместо конкретного числа можно указать категорию (согласно http://www.unicode.org/cldr/charts/29/supplemental/language_plural_rules.html).
+   *
+   * @param {number|string} number Число, с которым нужно согласовать данное слово или категория, описывающая правило построения множественного числа.
+   * @returns {Parse|False} Разбор, соответствующий указанному числу или False,
+   *  если произвести согласование не удалось.
+   */
+  Parse.prototype.pluralize = function(number) {
+    if (!this.tag.NOUN && !this.tag.ADJF && !this.tag.PRTF) {
+      return this;
+    }
+
+    if (typeof number == 'number') {
+      number = number % 100;
+      if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
+        number = 'many';
+      } else
+      if (number % 10 == 1) {
+        number = 'one';
+      } else {
+        number = 'few';
+      }
+    }
+
+    if (this.tag.NOUN && !this.tag.nomn && !this.tag.accs) {
+      return this.inflect([number == 'one' ? 'sing' : 'plur', this.tag.CAse]);
+    } else
+    if (number == 'one') {
+      return this.inflect(['sing', this.tag.nomn ? 'nomn' : 'accs'])
+    } else
+    if (this.tag.NOUN && (number == 'few')) {
+      return this.inflect(['sing', 'gent']);
+    } else
+    if ((this.tag.ADJF || this.tag.PRTF) && this.tag.femn && (number == 'few')) {
+      return this.inflect(['plur', 'nomn']);
+    } else {
+      return this.inflect(['plur', 'gent']);
+    }
+  }
+
+  /**
    * Проверяет, согласуется ли текущая форма слова с указанной.
    *
    * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
@@ -732,46 +840,45 @@
 
   // Выводит информацию о слове в консоль.
   Parse.prototype.log = function() {
-    console.group(this.word + this.suffix);
+    console.group(this.toString());
     console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
     console.log(this.tag.ext.toString());
     console.groupEnd();
   }
 
-  function lookupWord(word, config) {
+  function lookup(dawg, word, config) {
     var entries;
     if (config.typos == 'auto') {
-      entries = words.findAll(word, config.replacements, config.stutter, 0);
-      if (!entries.length && word.length > 4) {
-        entries = words.findAll(word, config.replacements, config.stutter, 1);
-        if (!results.length && word.length > 9) {
-          entries = words.findAll(word, config.replacements, config.stutter, 2);
-        }
+      entries = dawg.findAll(word, config.replacements, config.stutter, 0);
+      for (var i = 0; i < autoTypos.length && !entries.length && word.length > autoTypos[i]; i++) {
+        entries = dawg.findAll(word, config.replacements, config.stutter, i + 1);
       }
     } else {
-      entries = words.findAll(word, config.replacements, config.stutter, config.typos);
+      entries = dawg.findAll(word, config.replacements, config.stutter, config.typos);
     }
     return entries;
   }
 
   function getDictionaryScore(stutterCnt, typosCnt) {
     // = 1.0 if no stutter/typos
-    // = 0.5 if any number of stutter or 1 typo
-    // = 0.25 if 2 typos
-    // = 0.125 if 3 typos
-    return Math.pow(0.5, Math.min(stutterCnt, 1) + typosCnt);
+    // = 0.3 if any number of stutter or 1 typo
+    // = 0.09 if 2 typos
+    // = 0.027 if 3 typos
+    return Math.pow(0.3, Math.min(stutterCnt, 1) + typosCnt);
   }
 
-  var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt) {
+  var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt, prefix, suffix) {
     this.word = word;
     this.paradigmIdx = paradigmIdx;
     this.paradigm = paradigms[paradigmIdx];
     this.formIdx = formIdx;
-    this.tag = tags[this.paradigm[(this.paradigm.length / 3) + formIdx]];
+    this.formCnt = this.paradigm.length / 3;
+    this.tag = tags[this.paradigm[this.formCnt + formIdx]];
     this.stutterCnt = stutterCnt || 0;
     this.typosCnt = typosCnt || 0;
-    this.score = getDictionaryScore(stutterCnt, typosCnt);
-    this.suffix = '';
+    this.score = getDictionaryScore(this.stutterCnt, this.typosCnt);
+    this.prefix = prefix || '';
+    this.suffix = suffix || '';
   }
 
   DictionaryParse.prototype = Object.create(Parse.prototype);
@@ -782,9 +889,8 @@
     if (this._base) {
       return this._base;
     }
-    var len = this.paradigm.length / 3;
     return (this._base = this.word.substring(
-      prefixes[this.paradigm[(len << 1) + this.formIdx]].length,
+      prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]].length,
       this.word.length - suffixes[this.paradigm[this.formIdx]].length)
     );
   }
@@ -792,26 +898,25 @@
   // Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
   // Всегда выбирается первый подходящий вариант.
   DictionaryParse.prototype.inflect = function(tag, grammemes) {
-    var len = this.paradigm.length / 3;
     if (!grammemes && typeof tag === 'number') {
       // Inflect to specific formIdx
-      return new Parse(
-          prefixes[this.paradigm[(len << 1) + tag]] +
+      return new DictionaryParse(
+          prefixes[this.paradigm[(this.formCnt << 1) + tag]] +
           this.base() +
-          suffixes[this.paradigm[tag]] +
-          this.suffix,
-        tags[this.paradigm[len + tag]]
+          suffixes[this.paradigm[tag]],
+        this.paradigmIdx,
+        tag, 0, 0, this.prefix, this.suffix
       );
     }
 
-    for (var formIdx = 0; formIdx < len; formIdx++) {
-      if (tags[this.paradigm[len + formIdx]].matches(tag, grammemes)) {
-        return new Parse(
-            prefixes[this.paradigm[(len << 1) + formIdx]] +
+    for (var formIdx = 0; formIdx < this.formCnt; formIdx++) {
+      if (tags[this.paradigm[this.formCnt + formIdx]].matches(tag, grammemes)) {
+        return new DictionaryParse(
+            prefixes[this.paradigm[(this.formCnt << 1) + formIdx]] +
             this.base() +
-            suffixes[this.paradigm[formIdx]] +
-            this.suffix,
-          tags[this.paradigm[len + formIdx]]
+            suffixes[this.paradigm[formIdx]],
+          this.paradigmIdx,
+          formIdx, 0, 0, this.prefix, this.suffix
         );
       }
     }
@@ -820,33 +925,76 @@
   }
 
   DictionaryParse.prototype.log = function() {
-    var len = this.paradigm.length / 3;
-    console.group(this.word + this.suffix);
+    console.group(this.toString());
     console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
-    console.log(prefixes[this.paradigm[(len << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
+    console.log(prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
     console.log(this.tag.ext.toString());
     var norm = this.normalize();
-    console.log('=> ', norm[0] + ' (' + norm[1].ext.toString() + ')');
-    var norm = this.normalize(true);
-    console.log('=> ', norm[0] + ' (' + norm[1].ext.toString() + ')');
-    console.groupCollapsed('Все формы: ' + len);
-    for (var formIdx = 0; formIdx < len; formIdx++) {
+    console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
+    norm = this.normalize(true);
+    console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
+    console.groupCollapsed('Все формы: ' + this.formCnt);
+    for (var formIdx = 0; formIdx < this.formCnt; formIdx++) {
       var form = this.inflect(formIdx);
-      console.log(form[0] + ' (' + form[1].ext.toString() + ')');
+      console.log(form + ' (' + form.tag.ext.toString() + ')');
     }
     console.groupEnd();
     console.groupEnd();
   }
 
   DictionaryParse.prototype.toString = function() {
-    return this.word + this.suffix;
+    if (this.prefix) {
+      var pref = prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]];
+      return pref + this.prefix + this.word.substr(pref.length) + this.suffix;
+    } else {
+      return this.word + this.suffix;
+    }
+  }
+
+  var CombinedParse = function(left, right) {
+    this.left = left;
+    this.right = right;
+    this.tag = right.tag;
+    this.score = left.score * right.score * 0.8;
+    this.stutterCnt = left.stutterCnt + right.stutterCnt;
+    this.typosCnt = left.typosCnt + right.typosCnt;
+    if ('formCnt' in right) {
+      this.formCnt = right.formCnt;
+    }
+  }
+
+  CombinedParse.prototype = Object.create(Parse.prototype);
+  CombinedParse.prototype.constructor = CombinedParse;
+
+  CombinedParse.prototype.inflect = function(tag, grammemes) {
+    var left, right;
+
+    var right = this.right.inflect(tag, grammemes);
+    if (!grammemes && typeof tag === 'number') {
+      left = this.left.inflect(right.tag, ['POST', 'NMbr', 'CAse', 'PErs', 'TEns']);
+    } else {
+      left = this.left.inflect(tag, grammemes);
+    }
+    if (left && right) {
+      return new CombinedParse(left, right);
+    } else {
+      return false;
+    }
+  }
+
+  CombinedParse.prototype.toString = function() {
+    return this.left.word + '-' + this.right.word;
   }
 
   __init.push(function() {
     Morph.Parsers.Dictionary = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
 
-      var opts = lookupWord(word, config);
+      var opts = lookup(words, word, config);
 
       var vars = [];
       for (var i = 0; i < opts.length; i++) {
@@ -857,16 +1005,66 @@
             opts[i][1][j][1],
             opts[i][2],
             opts[i][3]);
+          if (config.ignoreCase || !w.tag.isCapitalized() || isCapitalized) {
+            vars.push(w);
+          }
+        }
+      }
+      return vars;
+    }
+
+    var abbrTags = [];
+    for (var i = 0; i <= 2; i++) {
+      for (var j = 0; j <= 5; j++) {
+        for (var k = 0; k <= 1; k++) {
+          abbrTags.push(makeTag(
+            'NOUN,inan,' + ['masc', 'femn', 'neut'][i] + ',Fixd,Abbr ' + ['sing', 'plur'][k] + ',' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
+            'СУЩ,неод,' + ['мр', 'жр', 'ср'][i] + ',0,аббр ' + ['ед', 'мн'][k] + ',' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
+          ));
+        }
+      }
+    }
+
+    // Произвольные аббревиатуры (несклоняемые)
+    // ВК, ЖК, ССМО, ОАО, ЛенСпецСМУ
+    Morph.Parsers.Abbr = function(word, config) {
+      // Однобуквенные считаются инициалами и для них заведены отдельные парсеры
+      if (word.length < 2) {
+        return [];
+      }
+      // Первая буква должна быть заглавной: сокращения с маленькой буквы (типа iOS) мало распространены
+      // Последняя буква должна быть заглавной: иначе сокращение, вероятно, склоняется
+      if ((initials.indexOf(word[0]) > -1) && (initials.indexOf(word[word.length - 1]) && -1)) {
+        var vars = [];
+        for (var i = 0; i < abbrTags.length; i++) {
+          var w = new Parse(word, abbrTags[i], 0.8);
           vars.push(w);
         }
+        return vars;
+      }
+      // При игнорировании регистра разбираем только короткие аббревиатуры
+      // (и требуем, чтобы каждая буква была «инициалом», т.е. без мягких/твердых знаков)
+      if (!config.ignoreCase || (word.length > 5)) {
+        return [];
+      }
+      word = word.toLocaleUpperCase();
+      for (var i = 0; i < word.length; i++) {
+        if (initials.indexOf(word[i]) == -1) {
+          return [];
+        }
+      }
+      var vars = [];
+      for (var i = 0; i < abbrTags.length; i++) {
+        var w = new Parse(word, abbrTags[i], 0.2);
+        vars.push(w);
       }
       return vars;
     }
 
     var InitialsParser = function(isPatronymic, score) {
       var initialsTags = [];
-      for (var i = 0; i < 1; i++) {
-        for (var j = 0; j < 6; j++) {
+      for (var i = 0; i <= 1; i++) {
+        for (var j = 0; j <= 5; j++) {
           initialsTags.push(makeTag(
             'NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
             'СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
@@ -944,7 +1142,7 @@
       for (var k = 0; k < particles.length; k++) {
         if (word.substr(word.length - particles[k].length) == particles[k]) {
           var base = word.slice(0, -particles[k].length);
-          var opts = lookupWord(base, config);
+          var opts = lookup(words, base, config);
 
           //console.log(opts);
           for (var i = 0; i < opts.length; i++) {
@@ -954,9 +1152,9 @@
                 opts[i][1][j][0],
                 opts[i][1][j][1],
                 opts[i][2],
-                opts[i][3]);
+                opts[i][3],
+                '', particles[k]);
               w.score *= 0.9;
-              w.suffix = particles[k];
               vars.push(w);
             }
           }
@@ -977,61 +1175,219 @@
         return [];
       }
 
-      var opts = lookupWord(word.substr(3), config);
+      var opts = lookup(words, word.substr(3), config);
 
-      var vars = [];
+      var parses = [];
       var used = {};
 
       for (var i = 0; i < opts.length; i++) {
         if (!used[opts[i][0]]) {
           for (var j = 0; j < opts[i][1].length; j++) {
-            var w = new DictionaryParse(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
-            if (w.matches(['ADJF', 'sing', 'datv'])) {
+            var parse = new DictionaryParse(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+            if (parse.matches(['ADJF', 'sing', 'datv'])) {
               used[opts[i][0]] = true;
 
-              w = new Parse(word, ADVB, w.score * 0.7, opts[i][2], opts[i][3]);
-              vars.push(w);
+              parse = new Parse('по-' + opts[i][0], ADVB, parse.score * 0.9, opts[i][2], opts[i][3]);
+              parses.push(parse);
               break;
             }
           }
         }
       }
-      return vars;
+      return parses;
     }
 
     // слово + '-' + слово
     // интернет-магазин
     // компания-производитель
     Morph.Parsers.HyphenWords = function(word, config) {
-      var parts = word.toLocaleLowerCase().split('-');
-      if (parts.length != 2) {
-        return [];
+      word = word.toLocaleLowerCase();
+      for (var i = 0; i < knownPrefixes.length; i++) {
+        if (knownPrefixes[i][knownPrefixes[i].length - 1] == '-' &&
+            word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
+          return [];
+        }
+      }
+      var parses = [];
+      var parts = word.split('-');
+      if (parts.length != 2 || !parts[0].length || !parts[1].length) {
+        if (parts.length > 2) {
+          var end = parts[parts.length - 1];
+          var right = Morph.Parsers.Dictionary(end, config);
+          for (var j = 0; j < right.length; j++) {
+            if (right[j] instanceof DictionaryParse) {
+              right[j].score *= 0.2;
+              right[j].prefix = word.substr(0, word.length - end.length - 1) + '-';
+              parses.push(right[j]);
+            }
+          }
+        }
+        return parses;
+      }
+      var left = Morph.Parsers.Dictionary(parts[0], config);
+      var right = Morph.Parsers.Dictionary(parts[1], config);
+
+
+      // Variable
+      for (var i = 0; i < left.length; i++) {
+        if (left[i].tag.Abbr) {
+          continue;
+        }
+        for (var j = 0; j < right.length; j++) {
+          if (!left[i].matches(right[j], ['POST', 'NMbr', 'CAse', 'PErs', 'TEns'])) {
+            continue;
+          }
+          if (left[i].stutterCnt + right[j].stutterCnt > config.stutter ||
+              left[i].typosCnt + right[j].typosCnt > config.typos) {
+            continue;
+          }
+          parses.push(new CombinedParse(left[i], right[j]));
+        }
+      }
+      // Fixed
+      for (var j = 0; j < right.length; j++) {
+        if (right[j] instanceof DictionaryParse) {
+          right[j].score *= 0.3;
+          right[j].prefix = parts[0] + '-';
+          parses.push(right[j]);
+        }
       }
 
-      return [];
+      return parses;
     }
 
 
     Morph.Parsers.PrefixKnown = function(word, config) {
-      // TODO
-      return [];
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
+      word = word.toLocaleLowerCase();
+      var parses = [];
+      for (var i = 0; i < knownPrefixes.length; i++) {
+        if (word.length - knownPrefixes[i].length < 3) {
+          continue;
+        }
+
+        if (word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
+          var end = word.substr(knownPrefixes[i].length);
+          var right = Morph.Parsers.Dictionary(end, config);
+          for (var j = 0; j < right.length; j++) {
+            if (!right[j].tag.isProductive()) {
+              continue;
+            }
+            if (!config.ignoreCase && right[j].tag.isCapitalized() && !isCapitalized) {
+              continue;
+            }
+            right[j].score *= 0.7;
+            right[j].prefix = knownPrefixes[i];
+            parses.push(right[j]);
+          }
+        }
+      }
+      return parses;
     }
 
     Morph.Parsers.PrefixUnknown = function(word, config) {
-      // TODO
-      return [];
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
+      word = word.toLocaleLowerCase();
+      var parses = [];
+      for (var len = 1; len <= 5; len++) {
+        if (word.length - len < 3) {
+          break;
+        }
+        var end = word.substr(len);
+        var right = Morph.Parsers.Dictionary(end, config);
+        for (var j = 0; j < right.length; j++) {
+          if (!right[j].tag.isProductive()) {
+            continue;
+          }
+          if (!config.ignoreCase && right[j].tag.isCapitalized() && !isCapitalized) {
+            continue;
+          }
+          right[j].score *= 0.3;
+          right[j].prefix = word.substr(0, len);
+          parses.push(right[j]);
+        }
+      }
+      return parses;
     }
 
+    // Отличие от предсказателя по суффиксам в pymorphy2: найдя подходящий суффикс, проверяем ещё и тот, что на символ короче
     Morph.Parsers.SuffixKnown = function(word, config) {
-      // TODO
-      return [];
+      if (word.length < 4) {
+        return [];
+      }
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
+      word = word.toLocaleLowerCase();
+      var parses = [];
+      var minlen = 1;
+      var coeffs = [0, 0.2, 0.3, 0.4, 0.5, 0.6];
+      var used = {};
+      for (var i = 0; i < prefixes.length; i++) {
+        if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
+          continue;
+        }
+        var base = word.substr(prefixes[i].length);
+        for (var len = 5; len >= minlen; len--) {
+          if (len >= base.length) {
+            continue;
+          }
+          var left = base.substr(0, base.length - len);
+          var right = base.substr(base.length - len);
+          var entries = predictionSuffixes[i].findAll(right, config.replacements, 0, 0);
+          if (!entries) {
+            continue;
+          }
+
+          var p = [];
+          var max = 1;
+          for (var j = 0; j < entries.length; j++) {
+            var suffix = entries[j][0];
+            var stats = entries[j][1];
+
+            for (var k = 0; k < stats.length; k++) {
+              var parse = new DictionaryParse(
+                prefixes[i] + left + suffix,
+                stats[k][1],
+                stats[k][2]);
+              // Why there is even non-productive forms in suffix DAWGs?
+              if (!parse.tag.isProductive()) {
+                continue;
+              }
+              if (!config.ignoreCase && parse.tag.isCapitalized() && !isCapitalized) {
+                continue;
+              }
+              var key = parse.toString() + ':' + stats[k][1] + ':' + stats[k][2];
+              if (key in used) {
+                continue;
+              }
+              max = Math.max(max, stats[k][0]);
+              parse.score = stats[k][0] * coeffs[len];
+              p.push(parse);
+              used[key] = true;
+            }
+          }
+          if (p.length > 0) {
+            for (var j = 0; j < p.length; j++) {
+              p[j].score /= max;
+            }
+            parses = parses.concat(p);
+            // Check also suffixes 1 letter shorter
+            minlen = Math.max(len - 1, 1);
+          }
+        }
+      }
+      return parses;
     }
 
-    var UNKN = makeTag('UNKN', 'НЕИЗВ');
-
-    Morph.Parsers.Unknown = function(word, config) {
-      return [new Parse(word.toLocaleLowerCase(), UNKN)];
-    }
+    UNKN = makeTag('UNKN', 'НЕИЗВ');
   });
 
   /**
@@ -1051,7 +1407,7 @@
    *
    * @param {string} [path] Директория, содержащая файлы 'words.dawg',
    * 'grammemes.json' и т.д. По умолчанию директория 'dicts' в данном модуле.
-   * @param {callback} callback Коллбэк, вызываемый после завершения загрузки
+   * @param {Function} callback Коллбэк, вызываемый после завершения загрузки
    *  всех словарей.
    */
   Morph.init = function(path, callback) {
@@ -1171,6 +1527,7 @@
   typeof define === 'function' && define.amd ? define('Az.Tokens', ['Az'], factory) :
   (global.Az = global.Az || {}) && (global.Az.Tokens = factory())
 }(this, function () { 'use strict';
+  /** @namespace Az **/
   var TLDs = 'ac|ad|ae|aero|af|ag|ai|al|am|ao|aq|ar|arpa|as|asia|at|au|aw|ax|az|ba|bb|be|bf|bg|bh|bi|biz|bj|bm|bo|br|bs|bt|bv|bw|by|bz|ca|cat|cc|cd|cf|cg|ch|ci|cl|cm|cn|co|com|coop|cr|cu|cv|cw|cx|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|es|et|eu|fi|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|info|int|io|iq|ir|is|it|je|jo|jobs|jp|kg|ki|km|kn|kp|kr|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mn|mo|mobi|mp|mq|mr|ms|mt|mu|museum|mv|mw|mx|my|na|name|nc|ne|net|nf|ng|nl|no|nr|nu|nz|om|org|pa|pe|pf|ph|pk|pl|pm|pn|post|pr|pro|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sx|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tr|travel|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|yt|امارات|հայ|বাংলা|бел|中国|中國|الجزائر|مصر|ею|გე|ελ|香港|भारत|بھارت|భారత్|ભારત|ਭਾਰਤ|ভারত|இந்தியா|ایران|ايران|عراق|الاردن|한국|қаз|ලංකා|இலங்கை|المغرب|мкд|мон|澳門|澳门|مليسيا|عمان|پاکستان|پاكستان|فلسطين|срб|рф|قطر|السعودية|السعودیة|السعودیۃ|السعوديه|سودان|新加坡|சிங்கப்பூர்|سورية|سوريا|ไทย|تونس|台灣|台湾|臺灣|укр|اليمن|xxx|zm|aaa|aarp|abarth|abb|abbott|abbvie|abc|able|abogado|abudhabi|academy|accenture|accountant|accountants|aco|active|actor|adac|ads|adult|aeg|aetna|afamilycompany|afl|africa|africamagic|agakhan|agency|aig|aigo|airbus|airforce|airtel|akdn|alfaromeo|alibaba|alipay|allfinanz|allstate|ally|alsace|alstom|americanexpress|americanfamily|amex|amfam|amica|amsterdam|analytics|android|anquan|anz|aol|apartments|app|apple|aquarelle|arab|aramco|archi|army|art|arte|asda|associates|athleta|attorney|auction|audi|audible|audio|auspost|author|auto|autos|avianca|aws|axa|azure|baby|baidu|banamex|bananarepublic|band|bank|bar|barcelona|barclaycard|barclays|barefoot|bargains|baseball|basketball|bauhaus|bayern|bbc|bbt|bbva|bcg|bcn|beats|beauty|beer|bentley|berlin|best|bestbuy|bet|bharti|bible|bid|bike|bing|bingo|bio|black|blackfriday|blanco|blockbuster|blog|bloomberg|blue|bms|bmw|bnl|bnpparibas|boats|boehringer|bofa|bom|bond|boo|book|booking|boots|bosch|bostik|boston|bot|boutique|box|bradesco|bridgestone|broadway|broker|brother|brussels|budapest|bugatti|build|builders|business|buy|buzz|bzh|cab|cafe|cal|call|calvinklein|camera|camp|cancerresearch|canon|capetown|capital|capitalone|car|caravan|cards|care|career|careers|cars|cartier|casa|case|caseih|cash|casino|catering|catholic|cba|cbn|cbre|cbs|ceb|center|ceo|cern|cfa|cfd|chanel|channel|chase|chat|cheap|chintai|chloe|christmas|chrome|chrysler|church|cipriani|circle|cisco|citadel|citi|citic|city|cityeats|claims|cleaning|click|clinic|clinique|clothing|cloud|club|clubmed|coach|codes|coffee|college|cologne|comcast|commbank|community|company|compare|computer|comsec|condos|construction|consulting|contact|contractors|cooking|cookingchannel|cool|corsica|country|coupon|coupons|courses|credit|creditcard|creditunion|cricket|crown|crs|cruise|cruises|csc|cuisinella|cymru|cyou|dabur|dad|dance|date|dating|datsun|day|dclk|dds|deal|dealer|deals|degree|delivery|dell|deloitte|delta|democrat|dental|dentist|desi|design|dev|dhl|diamonds|diet|digital|direct|directory|discount|discover|dish|diy|dnp|docs|dodge|dog|doha|domains|dot|download|drive|dstv|dtv|dubai|duck|dunlop|duns|dupont|durban|dvag|dwg|earth|eat|edeka|education|email|emerck|emerson|energy|engineer|engineering|enterprises|epost|epson|equipment|ericsson|erni|esq|estate|esurance|etisalat|eurovision|eus|events|everbank|exchange|expert|exposed|express|extraspace|fage|fail|fairwinds|faith|family|fan|fans|farm|farmers|fashion|fast|fedex|feedback|ferrari|ferrero|fiat|fidelity|fido|film|final|finance|financial|fire|firestone|firmdale|fish|fishing|fit|fitness|flickr|flights|flir|florist|flowers|flsmidth|fly|foo|foodnetwork|football|ford|forex|forsale|forum|foundation|fox|free|fresenius|frl|frogans|frontdoor|frontier|ftr|fujitsu|fujixerox|fun|fund|furniture|futbol|fyi|gal|gallery|gallo|gallup|game|games|gap|garden|gbiz|gdn|gea|gent|genting|george|ggee|gift|gifts|gives|giving|glade|glass|gle|global|globo|gmail|gmbh|gmo|gmx|godaddy|gold|goldpoint|golf|goo|goodhands|goodyear|goog|google|gop|got|gotv|grainger|graphics|gratis|green|gripe|group|guardian|gucci|guge|guide|guitars|guru|hair|hamburg|hangout|haus|hbo|hdfc|hdfcbank|health|healthcare|help|helsinki|here|hermes|hgtv|hiphop|hisamitsu|hitachi|hiv|hkt|hockey|holdings|holiday|homedepot|homegoods|homes|homesense|honda|honeywell|horse|host|hosting|hot|hoteles|hotmail|house|how|hsbc|htc|hughes|hyatt|hyundai|ibm|icbc|ice|icu|ieee|ifm|iinet|ikano|imamat|imdb|immo|immobilien|industries|infiniti|ing|ink|institute|insurance|insure|intel|international|intuit|investments|ipiranga|irish|iselect|ismaili|ist|istanbul|itau|itv|iveco|iwc|jaguar|java|jcb|jcp|jeep|jetzt|jewelry|jio|jlc|jll|jmp|jnj|joburg|jot|joy|jpmorgan|jprs|juegos|juniper|kaufen|kddi|kerryhotels|kerrylogistics|kerryproperties|kfh|kia|kim|kinder|kindle|kitchen|kiwi|koeln|komatsu|kosher|kpmg|kpn|krd|kred|kuokgroup|kyknet|kyoto|lacaixa|ladbrokes|lamborghini|lamer|lancaster|lancia|lancome|land|landrover|lanxess|lasalle|lat|latino|latrobe|law|lawyer|lds|lease|leclerc|lefrak|legal|lego|lexus|lgbt|liaison|lidl|life|lifeinsurance|lifestyle|lighting|like|lilly|limited|limo|lincoln|linde|link|lipsy|live|living|lixil|loan|loans|locker|locus|loft|lol|london|lotte|lotto|love|lpl|lplfinancial|ltd|ltda|lundbeck|lupin|luxe|luxury|macys|madrid|maif|maison|makeup|man|management|mango|market|marketing|markets|marriott|marshalls|maserati|mattel|mba|mcd|mcdonalds|mckinsey|med|media|meet|melbourne|meme|memorial|men|menu|meo|metlife|miami|microsoft|mini|mint|mit|mitsubishi|mlb|mls|mma|mnet|mobily|moda|moe|moi|mom|monash|money|monster|montblanc|mopar|mormon|mortgage|moscow|moto|motorcycles|mov|movie|movistar|msd|mtn|mtpc|mtr|multichoice|mutual|mutuelle|mzansimagic|nab|nadex|nagoya|naspers|nationwide|natura|navy|nba|nec|netbank|netflix|network|neustar|new|newholland|news|next|nextdirect|nexus|nfl|ngo|nhk|nico|nike|nikon|ninja|nissan|nissay|nokia|northwesternmutual|norton|now|nowruz|nowtv|nra|nrw|ntt|nyc|obi|observer|off|office|okinawa|olayan|olayangroup|oldnavy|ollo|omega|one|ong|onl|online|onyourside|ooo|open|oracle|orange|organic|orientexpress|origins|osaka|otsuka|ott|ovh|page|pamperedchef|panasonic|panerai|paris|pars|partners|parts|party|passagens|pay|payu|pccw|pet|pfizer|pharmacy|philips|photo|photography|photos|physio|piaget|pics|pictet|pictures|pid|pin|ping|pink|pioneer|pizza|place|play|playstation|plumbing|plus|pnc|pohl|poker|politie|porn|pramerica|praxi|press|prime|prod|productions|prof|progressive|promo|properties|property|protection|pru|prudential|pub|pwc|qpon|quebec|quest|qvc|racing|raid|read|realestate|realtor|realty|recipes|red|redstone|redumbrella|rehab|reise|reisen|reit|reliance|ren|rent|rentals|repair|report|republican|rest|restaurant|review|reviews|rexroth|rich|richardli|ricoh|rightathome|ril|rio|rip|rmit|rocher|rocks|rodeo|rogers|room|rsvp|ruhr|run|rwe|ryukyu|saarland|safe|safety|sakura|sale|salon|samsclub|samsung|sandvik|sandvikcoromant|sanofi|sap|sapo|sarl|sas|save|saxo|sbi|sbs|sca|scb|schaeffler|schmidt|scholarships|school|schule|schwarz|science|scjohnson|scor|scot|seat|secure|security|seek|select|sener|services|ses|seven|sew|sex|sexy|sfr|shangrila|sharp|shaw|shell|shia|shiksha|shoes|shopping|shouji|show|showtime|shriram|silk|sina|singles|site|ski|skin|sky|skype|sling|smart|smile|sncf|soccer|social|softbank|software|sohu|solar|solutions|song|sony|soy|space|spiegel|spot|spreadbetting|srl|srt|stada|staples|star|starhub|statebank|statefarm|statoil|stc|stcgroup|stockholm|storage|store|stream|studio|study|style|sucks|supersport|supplies|supply|support|surf|surgery|suzuki|swatch|swiftcover|swiss|sydney|symantec|systems|tab|taipei|talk|taobao|target|tatamotors|tatar|tattoo|tax|taxi|tci|tdk|team|tech|technology|telecity|telefonica|temasek|tennis|teva|thd|theater|theatre|theguardian|tiaa|tickets|tienda|tiffany|tips|tires|tirol|tjmaxx|tjx|tkmaxx|tmall|today|tokyo|tools|top|toray|toshiba|total|tours|town|toyota|toys|trade|trading|training|travelchannel|travelers|travelersinsurance|trust|trv|tube|tui|tunes|tushu|tvs|ubank|ubs|uconnect|unicom|university|uno|uol|ups|vacations|vana|vanguard|vegas|ventures|verisign|versicherung|vet|viajes|video|vig|viking|villas|vin|vip|virgin|visa|vision|vista|vistaprint|viva|vivo|vlaanderen|vodka|volkswagen|volvo|vote|voting|voto|voyage|vuelos|wales|walmart|walter|wang|wanggou|warman|watch|watches|weather|weatherchannel|webcam|weber|website|wed|wedding|weibo|weir|whoswho|wien|wiki|williamhill|win|windows|wine|winners|wme|wolterskluwer|woodside|work|works|world|wow|wtc|wtf|xbox|xerox|xfinity|xihuan|xin|कॉम|セール|佛山|慈善|集团|在线|大众汽车|点看|คอม|八卦|موقع|一号店|公益|公司|香格里拉|网站|移动|我爱你|москва|католик|онлайн|сайт|联通|קום|时尚|微博|淡马锡|ファッション|орг|नेट|ストア|삼성|商标|商店|商城|дети|ポイント|新闻|工行|家電|كوم|中文网|中信|娱乐|谷歌|電訊盈科|购物|クラウド|通販|网店|संगठन|餐厅|网络|ком|诺基亚|食品|飞利浦|手表|手机|ارامكو|العليان|اتصالات|بازار|موبايلي|ابوظبي|كاثوليك|همراه|닷컴|政府|شبكة|بيتك|عرب|机构|组织机构|健康|рус|珠宝|大拿|みんな|グーグル|世界|書籍|网址|닷넷|コム|天主教|游戏|vermögensberater|vermögensberatung|企业|信息|嘉里大酒店|嘉里|广东|政务|xperia|xyz|yachts|yahoo|yamaxun|yandex|yodobashi|yoga|yokohama|you|youtube|yun|zappos|zara|zero|zip|zippo|zone|zuerich'.split('|');
   var defaults = {
     html: false,
@@ -1194,7 +1551,8 @@
 
   /**
    * Токен, соответствующий некоторой подстроке в представленном на вход тексте.
-   * @typedef {Object} Token
+   *
+   * @constructor
    * @property {string} type Тип токена.
    * @property {string} subType Подтип токена.
    * @property {number} st Индекс первого символа, входящего в токен.
@@ -1203,6 +1561,41 @@
    * @property {boolean} firstUpper True, если первый символ токена является заглавной буквой.
    * @property {boolean} allUpper True, если все символы в токене являются заглавными буквами.
    */
+  var Token = function(source, st, length, index, firstUpper, allUpper, type, subType) {
+    this.source = source;
+    this.st = st;
+    this.length = length;
+    this.index = index;
+    this.firstUpper = firstUpper;
+    this.allUpper = allUpper;
+    this.type = type;
+    if (subType) {
+      this.subType = subType;
+    }
+  }
+  Token.prototype.toString = function() {
+    return (('_str' in this) && (this._str.length == this.length)) ? this._str : (this._str = this.source.substr(this.st, this.length));
+  }
+  Token.prototype.indexOf = function(str) {
+    if (str.length == 1) {
+      for (var i = 0; i < this.length; i++) {
+        if (this.source[this.st + i] == str) {
+          return i;
+        }
+      }
+      return -1;
+    }
+    return this.toString().indexOf(str);
+  }
+  Token.prototype.toLowerCase = function() {
+    return this.toString().toLocaleLowerCase();
+  }
+  Token.prototype.isCapitalized = function() {
+    return this.firstUpper && !this.allUpper;
+  }
+  Token.prototype.en = function() {
+    return this.st + this.length - 1;
+  }
 
   /**
    * Создает токенизатор текста с заданными опциями.
@@ -1242,17 +1635,43 @@
   var Tokens = function(text, config) {
     if (this instanceof Tokens) {
       this.tokens = [];
+      this.source = '';
       if (typeof text == 'string') {
-        this.config = config || defaults;
+        this.config = config ? Az.extend(defaults, config) : defaults;
         this.append(text);
       } else {
-        this.config = text || defaults;
+        this.config = text ? Az.extend(defaults, text) : defaults;
       }
       this.index = -1;
     } else {
       return new Tokens(text, config);
     }
   }
+
+  Tokens.WORD = new String('WORD');
+  Tokens.NUMBER = new String('NUMBER');
+  Tokens.OTHER = new String('OTHER');
+  Tokens.DIGIT = new String('DIGIT');
+  Tokens.CYRIL = new String('CYRIL');
+  Tokens.LATIN = new String('LATIN');
+  Tokens.MIXED = new String('MIXED');
+  Tokens.PUNCT = new String('PUNCT');
+  Tokens.SPACE = new String('SPACE');
+  Tokens.MARKUP = new String('MARKUP');
+  Tokens.NEWLINE = new String('NEWLINE');
+  Tokens.EMAIL = new String('EMAIL');
+  Tokens.LINK = new String('LINK');
+  Tokens.HASHTAG = new String('HASHTAG');
+  Tokens.MENTION = new String('MENTION');
+  Tokens.TAG = new String('TAG');
+  Tokens.CONTENT = new String('CONTENT');
+  Tokens.SCRIPT = new String('SCRIPT');
+  Tokens.STYLE = new String('STYLE');
+  Tokens.COMMENT = new String('COMMENT');
+  Tokens.CLOSING = new String('CLOSING');
+  Tokens.TEMPLATE = new String('TEMPLATE');
+  Tokens.RANGE = new String('RANGE');
+  Tokens.ENTITY = new String('ENTITY');
 
   /**
    * Отправляет ещё один кусок текста на токенизацию. Таким образом вполне
@@ -1266,417 +1685,501 @@
    * @see Tokens
    */
   Tokens.prototype.append = function(text, config) {
-    // TODO: get rid of 's' field (storing a copy of token)
-    // st + len + en should be enough (check that they are always correct)
-    config = config || this.config;
-    for (var k in defaults) {
-      if (!(k in config)) {
-        config[k] = defaults[k];
-      }
-    }
-    if (config.links && config.links.tlds === true) {
+    'use strict';
+    // Для производительности:
+    // - как можно меньше операций конкатенции/разбивки строк
+    // - вместо сравнения всего токена, проверяем соответствующий ему символ в исходной строке
+    // - типы токенов - константы в Tokens, формально это строки, но сравниваем через === (как объекты)
+    config = config ? Az.extend(this.config, config) : this.config;
+    if (config.links && (config.links.tlds === true)) {
       config.links.tlds = defaults.links.tlds;
     }
 
-    for (var i = 0; i < text.length; i++) {
-      var ch = text.charAt(i);
-      var code = text.charCodeAt(i);
+    var offs = this.source.length;
+    this.source += text;
+    
+    var s = this.source, ts = this.tokens;
+    for (var i = offs; i < s.length; i++) {
+      var ch = s[i];
+      var code = s.charCodeAt(i);
 
       var append = false;
-      var last = this.tokens.length - 1;
-      var token = this.tokens[last];
+      var last = ts.length - 1;
+      var token = ts[last];
+      var st = i;
 
-      if (config.html && ch == ';') {
+      if (config.html && (ch == ';')) {
         // &nbsp;
-        if (last > 0 && token.type == 'WORD' && this.tokens[last - 1].s == '&') {
-          var name = token.s.toLowerCase();
+        if ((last > 0) && 
+            (token.type === Tokens.WORD) && 
+            (ts[last - 1].length == 1) && 
+            (s[ts[last - 1].st] == '&')) {
+          var name = token.toLowerCase();
           if (name in HTML_ENTITIES) {
             ch = HTML_ENTITIES[name];
             code = ch.charCodeAt(0);
 
             last -= 2;
-            token = this.tokens[last];
-            this.tokens.length = last + 1;
+            token = ts[last];
+            ts.length = last + 1;
           }
         } else
         // &x123AF5;
         // &1234;
-        if (last > 1 && (token.type == 'NUMBER' || (token.type == 'WORD' && token.s[0] == 'x')) && this.tokens[last - 1].s == '#' && this.tokens[last - 2].s == '&') {
-          if (token.s[0] == 'x') {
-            code = parseInt(token.s.substr(1), 16);
+        if ((last > 1) && 
+            ((token.type === Tokens.NUMBER) || 
+             ((token.type === Tokens.WORD) &&
+              (s[token.st] == 'x'))) && 
+            (ts[last - 1].length == 1) &&
+            (s[ts[last - 1].st] == '#') && 
+            (ts[last - 1].length == 1) &&
+            (s[ts[last - 1].st] == '&')) {
+          if (s[token.st] == 'x') {
+            code = parseInt(token.toString().substr(1), 16);
           } else {
-            code = parseInt(token.s, 10);
+            code = parseInt(token.toString(), 10);
           }
           ch = String.fromCharCode(code);
 
           last -= 3;
-          token = this.tokens[last];
-          this.tokens.length = last + 1;
+          token = ts[last];
+          ts.length = last + 1;
         }
       }
 
-      var charType = 'OTHER';
+      var charType = Tokens.OTHER;
       var charUpper = (ch.toLocaleLowerCase() != ch);
-      if (code >= 0x0400 && code <= 0x04FF) charType = 'CYRIL';
-      if ((code >= 0x0041 && code <= 0x005A) || (code >= 0x0061 && code <= 0x007A) || (code >= 0x00C0 && code <= 0x024F)) charType = 'LATIN';
-      if (code >= 0x0030 && code <= 0x0039) charType = 'DIGIT';
-      if ((code <= 0x0020) || (code >= 0x0080 && code <= 0x00A0)) charType = 'SPACE';
-      if ('‐-−‒–—―.…,:;?!¿¡()[]«»"\'’‘’“”/⁄'.indexOf(ch) > -1) charType = 'PUNCT';
+      if (code >= 0x0400 && code <= 0x04FF) charType = Tokens.CYRIL;
+      if ((code >= 0x0041 && code <= 0x005A) || (code >= 0x0061 && code <= 0x007A) || (code >= 0x00C0 && code <= 0x024F)) charType = Tokens.LATIN;
+      if (code >= 0x0030 && code <= 0x0039) charType = Tokens.DIGIT;
+      if ((code <= 0x0020) || (code >= 0x0080 && code <= 0x00A0)) charType = Tokens.SPACE;
+      if ('‐-−‒–—―.…,:;?!¿¡()[]«»"\'’‘’“”/⁄'.indexOf(ch) > -1) charType = Tokens.PUNCT;
 
       var tokenType = charType;
       var tokenSubType = false;
-      if (charType == 'CYRIL' || charType == 'LATIN') {
-        tokenType = 'WORD';
+      if (charType === Tokens.CYRIL || charType === Tokens.LATIN) {
+        tokenType = Tokens.WORD;
         tokenSubType = charType;
       } else
-      if (charType == 'DIGIT') {
-        tokenType = 'NUMBER';
+      if (charType === Tokens.DIGIT) {
+        tokenType = Tokens.NUMBER;
       }
 
-      var lineStart = !token || token.s[token.s.length - 1] == '\n';
+      var lineStart = !token || (s[token.st + token.length - 1] == '\n');
 
       if (config.wiki) {
         if (lineStart) {
           if (':;*#~|'.indexOf(ch) > -1) {
-            tokenType = 'MARKUP';
-            tokenSubType = 'NEWLINE';
+            tokenType = Tokens.MARKUP;
+            tokenSubType = Tokens.NEWLINE;
           }
         }
         if ('={[|]}'.indexOf(ch) > -1) {
-          tokenType = 'MARKUP';
+          tokenType = Tokens.MARKUP;
         }
       }
 
       if (config.markdown) {
         if (lineStart) {
           if ('=-#>+-'.indexOf(ch) > -1) {
-            tokenType = 'MARKUP';
-            tokenSubType = 'NEWLINE';
+            tokenType = Tokens.MARKUP;
+            tokenSubType = Tokens.NEWLINE;
           }
         }
         if ('[]*~_`\\'.indexOf(ch) > -1) {
-          tokenType = 'MARKUP';
+          tokenType = Tokens.MARKUP;
         }
       }
 
       if (token) {
-        if (config.wiki && ch != '\'' && token.s == '\'' && last > 0 && this.tokens[last - 1].type == 'WORD') {
-          this.tokens[last - 1].s += token.s;
-          this.tokens[last - 1].en = token.en;
-          this.tokens[last - 1].len += token.len;
+        if (config.wiki && 
+            (ch != "'") && 
+            (token.length == 1) &&
+            (s[token.st] == "'") &&
+            (last > 0) &&
+            (ts[last - 1].type === Tokens.WORD)) {
+          ts[last - 1].length += token.length;
 
           last -= 1;
-          this.tokens.length = last + 1;
-          token = this.tokens[last];
+          ts.length = last + 1;
+          token = ts[last];
         }
 
         // Preprocess last token
-        if (config.links && config.links.tlds &&
-            (charType == 'PUNCT' || charType == 'SPACE') &&
-            this.tokens.length > 2 &&
-            this.tokens[last - 2].type == 'WORD' &&
-            this.tokens[last - 1].s == '.' &&
-            this.tokens[last].type == 'WORD' &&
-            this.tokens[last].s in config.links.tlds) {
+        if (config.links && 
+            config.links.tlds &&
+            ((charType === Tokens.PUNCT) || 
+             (charType === Tokens.SPACE)) &&
+            (ts.length > 2) &&
+            (ts[last - 2].type === Tokens.WORD) &&
+            (ts[last - 1].length == 1) &&
+            (s[ts[last - 1].st] == '.') &&
+            (ts[last].type === Tokens.WORD) &&
+            (token.toString() in config.links.tlds)) {
 
           // Merge all subdomains
-          while (last >= 2 &&
-                 this.tokens[last - 2].type == 'WORD' &&
-                 (this.tokens[last - 1].s == '.' || this.tokens[last - 1].s == '@' || this.tokens[last - 1].s == ':')) {
+          while ((last >= 2) &&
+                 (ts[last - 2].type === Tokens.WORD) &&
+                 (ts[last - 1].length == 1) &&
+                 ((s[ts[last - 1].st] == '.') || 
+                  (s[ts[last - 1].st] == '@') || 
+                  (s[ts[last - 1].st] == ':'))) {
             last -= 2;
-            token = this.tokens[last];
-            token.s += this.tokens[last + 1].s + this.tokens[last + 2].s;
-            token.allUpper = token.allUpper && this.tokens[last + 1].allUpper && this.tokens[last + 2].allUpper;
+            token = ts[last];
+            token.length += ts[last + 1].length + ts[last + 2].length;
+            token.allUpper = token.allUpper && ts[last + 1].allUpper && ts[last + 2].allUpper;
           }
 
-          if (config.emails && token.s.indexOf('@') > -1 && token.s.indexOf(':') == -1) {
+          if (config.emails && 
+              (token.indexOf('@') > -1) && 
+              (token.indexOf(':') == -1)) {
             // URL can contain a '@' but in that case it should be in form http://user@site.com or user:pass@site.com
             // So if URL has a '@' but no ':' in it, we assume it's a email
-            token.type = 'EMAIL';
+            token.type = Tokens.EMAIL;
           } else {
-            token.type = 'LINK';
+            token.type = Tokens.LINK;
 
             if (ch == '/') {
               append = true;
             }
           }
-          this.tokens.length = last + 1;
+          ts.length = last + 1;
         } else
 
         // Process next char (start new token or append to the previous one)
-        if (token.type == 'LINK') {
-          if (charType != 'SPACE' && ch != ',' && ch != '<') {
+        if (token.type === Tokens.LINK) {
+          if ((charType !== Tokens.SPACE) && (ch != ',') && (ch != '<')) {
             append = true;
           }
         } else
-        if (token.type == 'EMAIL') {
-          if (charType == 'CYRIL' || charType == 'LATIN' || ch == '.') {
+        if (token.type === Tokens.EMAIL) {
+          if ((charType === Tokens.CYRIL) || (charType === Tokens.LATIN) || (ch == '.')) {
             append = true;
           }
         } else
-        if (token.type == 'HASHTAG' || token.type == 'MENTION') {
-          if (charType == 'CYRIL' || charType == 'LATIN' || charType == 'DIGIT' || ch == '_' || (ch == '@' && token.s.indexOf('@') == -1)) {
+        if ((token.type === Tokens.HASHTAG) || (token.type === Tokens.MENTION)) {
+          if ((charType === Tokens.CYRIL) || 
+              (charType == Tokens.LATIN) || 
+              (charType == Tokens.DIGIT) || 
+              (ch == '_') || ((ch == '@') && (token.indexOf('@') == -1))) {
             append = true;
           }
         } else
-        if (token.type == 'TAG' && (token.quote || token.s[token.s.length - 1] != '>')) {
+        if ((token.type === Tokens.TAG) && (token.quote || (s[token.en()] != '>'))) {
           append = true;
           if (token.quote) {
-            if (ch == token.quote && token.s[token.s.length - 1] != '\\') {
+            if ((ch == token.quote) && (s[token.en()] != '\\')) {
               delete token.quote;
             }
           } else
-          if (ch == '"' || ch == '\'') {
+          if ((ch == '"') || (ch == "'")) {
             token.quote = ch;
           }
         } else
-        if (token.type == 'CONTENT') {
+        if (token.type === Tokens.CONTENT) {
           append = true;
           if (token.quote) {
-            if (ch == token.quote && token.s[token.s.length - 1] != '\\') {
+            if ((ch == token.quote) && (s[token.en()] != '\\')) {
               delete token.quote;
             }
           } else
-          if (ch == '"' || ch == '\'') {
+          if ((ch == '"') || (ch == "'")) {
             token.quote = ch;
           } else
           if (ch == '>') {
-            if (token.s.substr(-8) == '</script') {
-              token.s = token.s.substr(0, token.s.length - 8);
+            if ((token.length >= 8) && (token.toString().substr(-8) == '</script')) {
+              token.length -= 8;
+              st -= 8;
 
               append = false;
-              ch = '</script>';
-              tokenType = 'TAG';
-              tokenSubType = 'CLOSING';
-            }
+              tokenType = Tokens.TAG;
+              tokenSubType = Tokens.CLOSING;
+            } else 
+            if ((token.length >= 7) && (token.toString().substr(-7) == '</style')) {
+              token.length -= 7;
+              st -= 7;
+
+              append = false;
+              tokenType = Tokens.TAG;
+              tokenSubType = Tokens.CLOSING;
+            } 
           }
         } else
-        if (token.type == 'TAG' && ch != '<' && token.s.substr(1, 6).toLowerCase() == 'script') {
-          tokenType = 'CONTENT';
-          tokenSubType = 'SCRIPT';
+        if ((token.type === Tokens.TAG) && 
+            (token.type !== Tokens.CLOSING) &&
+            (token.length >= 8) &&
+            (token.toLowerCase().substr(1, 6) == 'script')) {
+          tokenType = Tokens.CONTENT;
+          tokenSubType = Tokens.SCRIPT;
         } else
-        if (token.type == 'TAG' && ch != '<' && token.s.substr(1, 5).toLowerCase() == 'style') {
-          tokenType = 'CONTENT';
-          tokenSubType = 'STYLE';
+        if ((token.type === Tokens.TAG) && 
+            (token.type !== Tokens.CLOSING) &&
+            (token.length >= 7) && 
+            (token.toLowerCase().substr(1, 5) == 'style')) {
+          tokenType = Tokens.CONTENT;
+          tokenSubType = Tokens.STYLE;
         } else
-        if (config.html && token.s == '<' && (charType == 'LATIN' || ch == '!' || ch == '/')) {
+        if (config.html && 
+            (token.length == 1) &&
+            (s[token.st] == '<') && 
+            ((charType === Tokens.LATIN) || (ch == '!') || (ch == '/'))) {
           append = true;
-          token.type = 'TAG';
+          token.type = Tokens.TAG;
           if (ch == '!') {
-            token.subType = 'COMMENT';
+            token.subType = Tokens.COMMENT;
           } else
           if (ch == '/') {
-            token.subType = 'CLOSING';
+            token.subType = Tokens.CLOSING;
           }
         } else
-        if (token.type == 'CONTENT') {
+        if (token.type === Tokens.CONTENT) {
           append = true;
         } else
-        if (token.type == 'MARKUP' && token.subType == 'TEMPLATE' && (token.s[token.s.length - 1] != '}' || token.s[token.s.length - 2] != '}')) {
+        if ((token.type === Tokens.MARKUP) && 
+            (token.subType == Tokens.TEMPLATE) && 
+            ((s[token.en()] != '}') || 
+             (s[token.en() - 1] != '}'))) {
           append = true;
         } else
-        if (token.type == 'MARKUP' && token.type == 'LINK' && token.s[token.s.length - 1] != ')') {
+        if ((token.type === Tokens.MARKUP) && 
+            (token.type === Tokens.LINK) && 
+            (s[token.en()] != ')')) {
           append = true;
         } else
-        if (token.type == 'MARKUP' && token.s[0] == '`' && token.subType == 'NEWLINE' && charType == 'LATIN') {
+        if ((token.type === Tokens.MARKUP) && 
+            (s[token.st] == '`') && 
+            (token.subType === Tokens.NEWLINE) &&
+            (charType === Tokens.LATIN)) {
           append = true;
         } else
-        if (charType == 'CYRIL' || charType == 'LATIN') {
-          if (token.type == 'WORD') {
+        if ((charType === Tokens.CYRIL) || (charType === Tokens.LATIN)) {
+          if (token.type === Tokens.WORD) {
             append = true;
-            token.subType = (token.subType == charType) ? token.subType : 'MIXED';
+            token.subType = (token.subType == charType) ? token.subType : Tokens.MIXED;
           } else
-          if (token.type == 'NUMBER') { // Digits + ending
+          if (token.type === Tokens.NUMBER) { // Digits + ending
             append = true;
-            token.subType = (token.subType && token.subType != charType) ? 'MIXED' : charType;
+            token.subType = (token.subType && token.subType != charType) ? Tokens.MIXED : charType;
           } else
-          if (config.hashtags && token.s == '#') { // Hashtags
+          if (config.hashtags && (token.length == 1) && (s[token.st] == '#')) { // Hashtags
             append = true;
-            token.type = 'HASHTAG';
+            token.type = Tokens.HASHTAG;
           } else
-          if (config.mentions && token.s == '@' && (last == 0 || this.tokens[last - 1].type == 'SPACE')) { // Mentions
+          if (config.mentions && 
+              (token.length == 1) && 
+              (s[token.st] == '@') && 
+              ((last == 0) || (ts[last - 1].type === Tokens.SPACE))) { // Mentions
             append = true;
-            token.type = 'MENTION';
+            token.type = Tokens.MENTION;
           } else
-          if (charType == 'LATIN' && (token.s == '\'' || token.s == '’')) {
+          if ((charType === Tokens.LATIN) && 
+              (token.length == 1) && 
+              ((s[token.st] == "'") || (s[token.st] == '’'))) {
             append = true;
-            token.type = 'WORD';
-            token.subType = 'LATIN';
+            token.type = Tokens.WORD;
+            token.subType = Tokens.LATIN;
           } else
-          if (token.s == '-') { // -цать (?), 3-й
+          if ((token.length == 1) && (s[token.st] == '-')) { // -цать (?), 3-й
             append = true;
 
-            if (last > 0 && this.tokens[last - 1].type == 'NUMBER') {
-              token = this.tokens[last - 1];
-              token.s += this.tokens[last].s;
+            if ((last > 0) && (ts[last - 1].type === Tokens.NUMBER)) {
+              token = ts[last - 1];
+              token.length += ts[last].length;
 
-              this.tokens.length -= 1;
+              ts.length -= 1;
             }
 
-            token.type = 'WORD';
+            token.type = Tokens.WORD;
             token.subType = charType;
           }
         } else
-        if (charType == 'DIGIT') {
-          if (token.type == 'WORD') {
+        if (charType === Tokens.DIGIT) {
+          if (token.type === Tokens.WORD) {
             append = true;
-            token.subType = 'MIXED';
+            token.subType = Tokens.MIXED;
           } else
-          if (token.type == 'NUMBER') {
+          if (token.type === Tokens.NUMBER) {
             append = true;
           } else
-          if (token.s == '+' || token.s == '-') {
+          if ((token.length == 1) &&
+              ((s[token.st] == '+') || (s[token.st] == '-'))) {
             append = true;
 
-            if (last > 0 && this.tokens[last - 1].type == 'NUMBER') {
-              token = this.tokens[last - 1];
-              token.s += this.tokens[last].s;
-              token.subType = 'RANGE';
+            if ((last > 0) && (ts[last - 1].type === Tokens.NUMBER)) {
+              token = ts[last - 1];
+              token.length += ts[last].length;
+              token.subType = Tokens.RANGE;
 
-              this.tokens.length -= 1;
+              ts.length -= 1;
             }
 
-            token.type = 'NUMBER';
+            token.type = Tokens.NUMBER;
           } else
-          if ((token.s == ',' || token.s == '.') && this.tokens.length > 1 && this.tokens[last - 1].type == 'NUMBER') {
+          if ((token.length == 1) &&
+              ((s[token.st] == ',') || (s[token.st] == '.')) && 
+              (ts.length > 1) && 
+              (ts[last - 1].type === Tokens.NUMBER)) {
             append = true;
 
-            token = this.tokens[last - 1];
-            token.s += this.tokens[last].s;
+            token = ts[last - 1];
+            token.length += ts[last].length;
 
-            this.tokens.length -= 1;
+            ts.length -= 1;
           }
         } else
-        if (charType == 'SPACE') {
-          if (token.type == 'SPACE') {
+        if (charType === Tokens.SPACE) {
+          if (token.type === Tokens.SPACE) {
             append = true;
           }
         } else
-        if (token.type == 'MARKUP' && token.s[0] == ch && '=-~:*#`\'>_'.indexOf(ch) > -1) {
+        if ((token.type === Tokens.MARKUP) && 
+            (s[token.st] == ch) &&
+            ('=-~:*#`\'>_'.indexOf(ch) > -1)) {
           append = true;
         } else
         if (ch == '.') {
-          if (config.links && config.links.www && token.s.toLocaleLowerCase() == 'www') { // Links without protocol but with www
+          if (config.links && 
+              config.links.www && 
+              (token.length == 3) &&
+              (token.toLowerCase() == 'www')) { // Links without protocol but with www
             append = true;
-            token.type = 'LINK';
+            token.type = Tokens.LINK;
           }
         } else
-        if (config.wiki && ch == '\'') {
-          if (token.s == '\'') {
+        if (config.wiki && (ch == "'")) {
+          if ((token.length == 1) && (s[token.st] == "'")) {
             append = true;
-            token.type = 'MARKUP';
+            token.type = Tokens.MARKUP;
           } else {
-            tokenType = 'PUNCT';
+            tokenType = Tokens.PUNCT;
           }
         } else
-        if (ch == '-' || ch == '’' || ch == '\'') {
-          if (token.type == 'WORD') {
+        if ((ch == '-') || (ch == '’') || (ch == "'")) {
+          if (token.type === Tokens.WORD) {
             append = true;
           }
         } else
         if (ch == '/') {
-          if (config.links && config.links.protocols &&
-              this.tokens.length > 2 &&
-              this.tokens[last - 2].type == 'WORD' &&
-              this.tokens[last - 2].subType == 'LATIN' &&
-              this.tokens[last - 1].s == ':' &&
-              this.tokens[last].s == '/') { // Links (with protocols)
+          if (config.links && 
+              config.links.protocols &&
+              (ts.length > 2) &&
+              (ts[last - 2].type === Tokens.WORD) &&
+              (ts[last - 2].subType == Tokens.LATIN) &&
+              (ts[last - 1].length == 1) &&
+              (s[ts[last - 1].st] == ':') &&
+              (ts[last].length == 1) &&
+              (s[ts[last].st] == '/')) { // Links (with protocols)
             append = true;
 
-            token = this.tokens[last - 2];
-            token.s += this.tokens[last - 1].s + this.tokens[last].s;
-            token.allUpper = token.allUpper && this.tokens[last - 1].allUpper && this.tokens[last].allUpper;
-            token.type = 'LINK';
+            token = ts[last - 2];
+            token.length += ts[last - 1].length + ts[last].length;
+            token.allUpper = token.allUpper && ts[last - 1].allUpper && ts[last].allUpper;
+            token.type = Tokens.LINK;
 
-            this.tokens.length -= 2;
+            ts.length -= 2;
           }
         } else
         if (config.html && ch == ';') {
-          if (last > 0 && token.type == 'WORD' && this.tokens[last - 1].s == '&') {
+          if ((last > 0) && 
+              (token.type === Tokens.WORD) && 
+              (ts[last - 1].length == 1) &&
+              (s[ts[last - 1].st] == '&')) {
             append = true;
 
-            token = this.tokens[last - 1];
-            token.s += this.tokens[last].s;
-            token.allUpper = token.allUpper && this.tokens[last - 1].allUpper;
-            token.type = 'ENTITY';
+            token = ts[last - 1];
+            token.length += ts[last].length;
+            token.allUpper = token.allUpper && ts[last - 1].allUpper;
+            token.type = Tokens.ENTITY;
 
-            this.tokens.length -= 1;
+            ts.length -= 1;
           } else
-          if (last > 1 && (token.type == 'WORD' || token.type == 'NUMBER') && this.tokens[last - 1].s == '#' && this.tokens[last - 2].s == '&') {
+          if ((last > 1) && 
+              ((token.type === Tokens.WORD) || 
+               (token.type === Tokens.NUMBER)) && 
+              (ts[last - 1].length == 1) &&
+              (s[ts[last - 1].st] == '#') && 
+              (ts[last - 2].length == 1) &&
+              (s[ts[last - 2].st] == '&')) {
             append = true;
 
-            token = this.tokens[last - 2];
-            token.s += this.tokens[last - 1].s + this.tokens[last].s;
-            token.allUpper = token.allUpper && this.tokens[last - 1].allUpper && this.tokens[last].allUpper;
-            token.type = 'ENTITY';
+            token = ts[last - 2];
+            token.length += ts[last - 1].length + ts[last].length;
+            token.allUpper = token.allUpper && ts[last - 1].allUpper && ts[last].allUpper;
+            token.type = Tokens.ENTITY;
 
-            this.tokens.length -= 2;
+            ts.length -= 2;
           }
         } else
-        if (config.markdown && ch == '[' && token.s == '!') {
+        if (config.markdown && 
+            (ch == '[') && 
+            (token.length == 1) &&
+            (s[token.st] == '!')) {
           append = true;
-          token.type = 'MARKUP';
+          token.type = Tokens.MARKUP;
         } else
-        if (config.markdown && ch == '(' && token.s == ']') {
-          tokenType = 'MARKUP';
-          tokenSubType = 'LINK';
+        if (config.markdown && 
+            (ch == '(') &&
+            (token.length == 1) &&
+            (s[token.st] == ']')) {
+          tokenType = Tokens.MARKUP;
+          tokenSubType = Tokens.LINK;
         } else
-        if (config.wiki && ch == '{' && token.s == '{') {
+        if (config.wiki && 
+            (ch == '{') &&
+            (token.length == 1) &&
+            (s[token.st] == '{')) {
           append = true;
-          token.type = 'MARKUP';
-          token.subType = 'TEMPLATE';
+          token.type = Tokens.MARKUP;
+          token.subType = Tokens.TEMPLATE;
         } else
-        if (config.wiki && ch == '[' && token.s == '[') {
+        if (config.wiki && 
+            (ch == '[') && 
+            (token.length == 1) &&
+            (s[token.st] == '[')) {
           append = true;
         } else
-        if (config.wiki && ch == ']' && token.s == ']') {
+        if (config.wiki && 
+            (ch == ']') && 
+            (token.length == 1) &&
+            (s[token.st] == ']')) {
           append = true;
         } else
-        if (config.wiki && ch == '|' && !lineStart) {
+        if (config.wiki && (ch == '|') && !lineStart) {
           var found = -1;
           for (var j = last - 1; j >= 0; j--) {
-            if (this.tokens[j].s == '[[') {
+            if ((ts[j].length == 2) && 
+                (s[ts[j].st] == '[') && 
+                (s[ts[j].st + 1] == '[')) {
               found = j;
               break;
             }
-            if (this.tokens[j].s == '|' || this.tokens[j].s.indexOf('\n') > -1) {
+            if (((ts[j].length == 1) && 
+                 (s[ts[j].st] == '|')) || 
+                ts[j].indexOf('\n') > -1) {
               break;
             }
           }
           if (found > -1) {
             append = true;
             for (var j = last - 1; j >= found; j--) {
-              token = this.tokens[j];
-              token.s += this.tokens[j + 1].s;
-              token.allUpper = token.allUpper && this.tokens[j + 1].allUpper;
+              token = ts[j];
+              token.length += ts[j + 1].length;
+              token.allUpper = token.allUpper && ts[j + 1].allUpper;
             }
             last = found;
-            this.tokens.length = last + 1;
-            token.subType = 'LINK';
+            ts.length = last + 1;
+            token.subType = Tokens.LINK;
           }
         }
       }
 
       if (append) {
-        token.s += ch;
+        token.length++;
+        token.allUpper = token.allUpper && charUpper;
       } else {
-        token = {
-          type: tokenType,
-          s: ch,
-          st: i,
-          idx: this.tokens.length,
-
-          firstUpper: charUpper,
-          allUpper: charUpper,
-        }
-        if (tokenSubType) {
-          token.subType = tokenSubType;
-        }
-        this.tokens.push(token);
+        token = new Token(s, st, i + 1 - st, ts.length, charUpper, charUpper, tokenType, tokenSubType);
+        ts.push(token);
       }
-      token.en = i;
-      token.length = (token.en - token.st) + 1;
-      token.allUpper = token.allUpper && charUpper;
     }
     return this;
   }

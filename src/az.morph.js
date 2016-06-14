@@ -19,7 +19,7 @@
         typos: 0,
         parsers: [
           // Словарные слова + инициалы
-          'Dictionary?', 'AbbrName?', 'AbbrPatronymic', 'Abbr?',
+          'Dictionary?', 'AbbrName?', 'AbbrPatronymic?', 'Abbr',
           // Числа, пунктуация, латиница (по-хорошему, токенизатор не должен эту ерунду сюда пускать)
           'IntNumber', 'RealNumber', 'Punctuation', 'RomanNumber?', 'Latin',
           // Слова с дефисами
