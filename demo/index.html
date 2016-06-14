@@ -101,7 +101,7 @@
 
   <div class="uk-form">
     <h3>Слово для морфологического разбора<br/><small>(можно кликать по кириллическим токенам сверху)</small></h3>
-    <input id="word" type="text" style="width: 50%" placeholder="Слово для разбора">
+    <input id="word" type="text" style="width: 50%" placeholder="Слово для разбора" value="варкалось">
   </div>
 
   <h3>Результаты разбора</h3>
@@ -115,8 +115,8 @@
       el.style.display = (el.style.display == 'none') ? 'table-row' : 'none';
     }
     Az.Morph.init('../dicts', function(err, Morph) {
-      //Morph('слово');
       document.getElementById('word').addEventListener('keyup', updateMorph, false);
+      updateMorph();
     });
 
     function updateMorph() {
