@@ -169,7 +169,7 @@
     // Match to another tag
     for (var i = 0; i < grammemes.length; i++) {
       if (tag[grammemes[i]] != this[grammemes[i]]) {
-        // Special case: tag.CAse 
+        // Special case: tag.CAse
         return false;
       }
     }
@@ -177,8 +177,8 @@
   }
 
   Tag.prototype.isProductive = function() {
-    return !(this.NUMR || this.NPRO || this.PRED || this.PREP || 
-      this.CONJ || this.PRCL || this.INTJ || this.Apro || 
+    return !(this.NUMR || this.NPRO || this.PRED || this.PREP ||
+      this.CONJ || this.PRCL || this.INTJ || this.Apro ||
       this.NUMB || this.ROMN || this.LATN || this.PNCT ||
       this.UNKN);
   }
@@ -222,10 +222,10 @@
    * опечаток в слове.
    *
    *  Опечаткой считается:
-   *   - лишняя буква в слове
-   *   - (пропущенная буква в слове) (TODO: пока не работает)
-   *   - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
-   *   - переставленные местами соседние буквы
+   *  - лишняя буква в слове
+   *  - пропущенная буква в слове (TODO: самый медленный тип опечаток, стоит сделать опциональным)
+   *  - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
+   *  - переставленные местами соседние буквы
    *
    *  0 или false чтобы отключить.
    *
@@ -802,7 +802,7 @@
           parses.push(right[j]);
         }
       }
-      
+
       return parses;
     }
 
@@ -930,7 +930,7 @@
             }
             parses = parses.concat(p);
             // Check also suffixes 1 letter shorter
-            minlen = Math.max(len - 1, 1); 
+            minlen = Math.max(len - 1, 1);
           }
         }
       }

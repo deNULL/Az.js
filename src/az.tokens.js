@@ -28,6 +28,7 @@
   /**
    * Токен, соответствующий некоторой подстроке в представленном на вход тексте.
    *
+   * @constructor
    * @property {string} type Тип токена.
    * @property {string} subType Подтип токена.
    * @property {number} st Индекс первого символа, входящего в токен.
@@ -108,7 +109,6 @@
    * @memberof Az
    */
   var Tokens = function(text, config) {
-    'use strict';
     if (this instanceof Tokens) {
       this.tokens = [];
       this.source = '';
@@ -161,6 +161,7 @@
    * @see Tokens
    */
   Tokens.prototype.append = function(text, config) {
+    'use strict';
     // Для производительности:
     // - как можно меньше операций конкатенции/разбивки строк
     // - вместо сравнения всего токена, проверяем соответствующий ему символ в исходной строке
