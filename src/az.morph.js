@@ -454,7 +454,7 @@
     this.tag = tags[this.paradigm[this.formCnt + formIdx]];
     this.stutterCnt = stutterCnt || 0;
     this.typosCnt = typosCnt || 0;
-    this.score = getDictionaryScore(stutterCnt, typosCnt);
+    this.score = getDictionaryScore(this.stutterCnt, this.typosCnt);
     this.prefix = prefix || '';
     this.suffix = suffix || '';
   }
@@ -733,7 +733,8 @@
     Morph.Parsers.HyphenWords = function(word, config) {
       word = word.toLocaleLowerCase();
       for (var i = 0; i < knownPrefixes.length; i++) {
-        if (word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
+        if (knownPrefixes[i][knownPrefixes[i].length - 1] == '-' &&
+            word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
           return [];
         }
       }
@@ -855,12 +856,14 @@
         (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
+      var minlen = 1;
+      var coeffs = [0, 0.2, 0.3, 0.4, 0.5, 0.6];
       for (var i = 0; i < prefixes.length; i++) {
         if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
           continue;
         }
         var base = word.substr(prefixes[i].length);
-        for (var len = 5; len >= 1; len--) {
+        for (var len = 5; len >= minlen; len--) {
           if (len >= base.length) {
             continue;
           }
@@ -891,7 +894,7 @@
               }
               // TODO: ignore duplicates
               max = Math.max(max, stats[k][0]);
-              parse.score = stats[k][0] * 0.5;
+              parse.score = stats[k][0] * coeffs[len];
               p.push(parse);
             }
           }
@@ -900,7 +903,8 @@
               p[j].score /= max;
             }
             parses = parses.concat(p);
-            break;
+            // Check also suffixes 1 letter shorter
+            minlen = Math.max(len - 1, 1); 
           }
         }
       }
