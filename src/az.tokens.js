@@ -273,7 +273,8 @@
             (token.length == 1) &&
             (s[token.st] == "'") &&
             (last > 0) &&
-            (ts[last - 1].type === Tokens.WORD)) {
+            (ts[last - 1].type === Tokens.WORD) &&
+            (ts[last - 1].subType === Tokens.LATIN)) {
           ts[last - 1].length += token.length;
 
           last -= 1;
@@ -522,15 +523,19 @@
             token.type = Tokens.LINK;
           }
         } else
-        if (config.wiki && (ch == "'")) {
-          if ((token.length == 1) && (s[token.st] == "'")) {
+        if (config.wiki && (ch == "'") && (s[token.en()] == "'")) {
+          if (token.length > 1) {
+            token.length--;
+            st--;
+            tokenType = Tokens.MARKUP;
+          } else {
             append = true;
             token.type = Tokens.MARKUP;
-          } else {
-            tokenType = Tokens.PUNCT;
           }
         } else
-        if ((ch == '-') || (ch == '’') || (ch == "'")) {
+        if ((ch == '-') || 
+            ((token.subType == Tokens.LATIN) && 
+             ((ch == '’') || (ch == "'")))) {
           if (token.type === Tokens.WORD) {
             append = true;
           }
