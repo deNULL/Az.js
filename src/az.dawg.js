@@ -29,6 +29,13 @@
     1054: 206, 1095: 247, 1096: 248, 8249: 139, 1097: 249, 1098: 250, 1044: 196, 1099: 251, 1111: 191, 1055: 207, 1100: 252, 1038: 161, 8220: 147, 1101: 253,
     8250: 155, 1102: 254, 8216: 145, 1103: 255, 1043: 195, 1105: 184, 1039: 143, 1026: 128, 1106: 144, 8218: 130, 1107: 131, 8217: 146, 1108: 186, 1109: 190};
 
+  var UCS2 = {};
+  for (var k in CP1251) {
+    UCS2[CP1251[k]] = String.fromCharCode(k);
+    delete UCS2[0];
+    delete UCS2[1];
+  }
+
   // Based on all common ЙЦУКЕН-keyboards (both Windows and Apple variations)
   var COMMON_TYPOS = {
     'й': 'ёцыф', 'ц': 'йфыву', 'у': 'цывак', 'к': 'увапе', 'е': 'капрн', 'н': 'епрог', 'г': 'нролш', 'ш': 'голдщ', 'щ': 'шлджз', 'з': 'щджэх-', 'х': 'зжэъ-', 'ъ': 'хэ-ё',
@@ -214,6 +221,18 @@
 
       // Done
       if (len == str.length) {
+        if (typos < mtypos && !stutter) {
+          // Allow missing letter(s) at the very end
+          var label = this.guide[index << 1]; // First child
+          do {
+            cur = this.followByte(label, index);
+            if ((cur != MISSING) && (label in UCS2)) {
+              prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
+            }
+            label = this.guide[(cur << 1) + 1]; // Next child
+          } while (cur != MISSING);
+        }
+
         if (this.format == 'int') {
           if (this.hasValue(index)) {
             results.push([prefix, this.value(index)]);
@@ -247,8 +266,18 @@
         // Skip a letter entirely (extra letter)
         prefixes.push([ prefix, len + 1, typos + 1, stutter, index ]);
 
-        // Add a letter (missing) - or - replace a letter
+        // Add a letter (missing)
         // TODO: iterate all childs?
+        var label = this.guide[index << 1]; // First child
+        do {
+          cur = this.followByte(label, index);
+          if ((cur != MISSING) && (label in UCS2)) {
+            prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
+          }
+          label = this.guide[(cur << 1) + 1]; // Next child
+        } while (cur != MISSING);
+
+        // Replace a letter
         // Now it checks only most probable typos (located near to each other on keyboards)
         var possible = COMMON_TYPOS[str[len]];
         if (possible) {

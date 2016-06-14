@@ -508,13 +508,13 @@
     console.log(prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
     console.log(this.tag.ext.toString());
     var norm = this.normalize();
-    console.log('=> ', norm[0] + ' (' + norm[1].ext.toString() + ')');
-    var norm = this.normalize(true);
-    console.log('=> ', norm[0] + ' (' + norm[1].ext.toString() + ')');
-    console.groupCollapsed('Все формы: ' + len);
+    console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
+    norm = this.normalize(true);
+    console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
+    console.groupCollapsed('Все формы: ' + this.formCnt);
     for (var formIdx = 0; formIdx < this.formCnt; formIdx++) {
       var form = this.inflect(formIdx);
-      console.log(form[0] + ' (' + form[1].ext.toString() + ')');
+      console.log(form + ' (' + form.tag.ext.toString() + ')');
     }
     console.groupEnd();
     console.groupEnd();
@@ -846,6 +846,7 @@
       return parses;
     }
 
+    // Отличие от предсказателя по суффиксам в pymorphy2: найдя подходящий суффикс, проверяем ещё и тот, что на символ короче
     Morph.Parsers.SuffixKnown = function(word, config) {
       if (word.length < 4) {
         return [];
@@ -858,6 +859,7 @@
       var parses = [];
       var minlen = 1;
       var coeffs = [0, 0.2, 0.3, 0.4, 0.5, 0.6];
+      var used = {};
       for (var i = 0; i < prefixes.length; i++) {
         if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
           continue;
@@ -892,10 +894,14 @@
               if (!config.ignoreCase && parse.tag.isCapitalized() && !isCapitalized) {
                 continue;
               }
-              // TODO: ignore duplicates
+              var key = parse.toString() + ':' + stats[k][1] + ':' + stats[k][2];
+              if (key in used) {
+                continue;
+              }
               max = Math.max(max, stats[k][0]);
               parse.score = stats[k][0] * coeffs[len];
               p.push(parse);
+              used[key] = true;
             }
           }
           if (p.length > 0) {
