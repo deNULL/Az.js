@@ -1861,6 +1861,13 @@
 
         // Process next char (start new token or append to the previous one)
         if (token.type === Tokens.LINK) {
+          if ((ch == ')') && 
+              (last >= 1) && 
+              (ts[last - 1].type === Tokens.MARKUP) &&
+              (ts[last - 1].length == 1) &&
+              (s[ts[last - 1].st] == '(')) {
+            tokenType = Tokens.MARKUP;
+          } else
           if ((charType !== Tokens.SPACE) && (ch != ',') && (ch != '<')) {
             append = true;
           }
@@ -2204,7 +2211,7 @@
   /**
    * Завершает токенизацию, возвращая список токенов.
    *
-   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
    *  отфильтровать результат.
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
    *  токены со всеми типами, за исключением перечисленных в filter.
@@ -2216,9 +2223,25 @@
     if (!filter) {
       return this.tokens;
     }
+    var types = filter;
+    var exclusive = false;
+    if ('length' in filter) {
+      types = {};
+      for (var i = 0; i < filter.length; i++) {
+        types[filter[i]] = true;
+      }
+    } else {
+      exclusive = exclude;
+      exclude = false;
+    }
     var list = [];
     for (var i = 0; i < this.tokens.length; i++) {
-      if ((filter.indexOf(this.tokens[i].type) == -1) == exclude) {
+      if (this.tokens[i].type in types) {
+        if (types[this.tokens[i].type] != exclude) {
+          list.push(this.tokens[i]);
+        }
+      } else
+      if (!exclusive) {
         list.push(this.tokens[i]);
       }
     }
@@ -2228,19 +2251,35 @@
   /**
    * Подсчитывает текущее количество токенов.
    *
-   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
    *  отфильтровать результат.
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. подсчитываются
    *  токены со всеми типами, за исключением перечисленных в filter.
    * @returns {Number} Число токенов после фильтрации.
    */
   Tokens.prototype.count = function(filter, exclude) {
-    if (!skipSpace && !skipPunct) {
+    if (!filter) {
       return this.tokens.length;
+    }
+    var types = filter;
+    var exclusive = false;
+    if ('length' in filter) {
+      types = {};
+      for (var i = 0; i < filter.length; i++) {
+        types[filter[i]] = true;
+      }
+    } else {
+      exclusive = exclude;
+      exclude = false;
     }
     var count = 0;
     for (var i = 0; i < this.tokens.length; i++) {
-      if ((filter.indexOf(this.tokens[i].type) == -1) == exclude) {
+      if (this.tokens[i].type in types) {
+        if (types[this.tokens[i].type] != exclude) {
+          count++;
+        }
+      } else
+      if (!exclusive) {
         count++;
       }
     }
@@ -2253,7 +2292,7 @@
    * @param {boolean} moveIndex Следует ли переместить указатель к
    *  следующему токену (в противном случае следующий вызов nextToken вернет
    *  тот же результат)
-   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
    *  итерироваться.
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
    *  токены со всеми типами, за исключением перечисленных в filter.
@@ -2261,10 +2300,32 @@
    *  впереди нет.
    */
   Tokens.prototype.nextToken = function(moveIndex, filter, exclude) {
+    var types = filter || {};
+    var exclusive = false;
+    if ('length' in filter) {
+      types = {};
+      for (var i = 0; i < filter.length; i++) {
+        types[filter[i]] = true;
+      }
+    } else {
+      exclusive = exclude;
+      exclude = false;
+    }
     var index = this.index;
     index++;
-    while (index < this.tokens.length && filter && (filter.indexOf(this.tokens[index].type) != -1) == exclude) {
-      index++;
+    while (index < this.tokens.length) {
+      if (this.tokens[index].type in types) {
+        if (types[this.tokens[index].type] != exclude) {
+          index++;
+        } else {
+          break;
+        }
+      } else
+      if (!exclusive) {
+        index++;
+      } else {
+        break;
+      }
     }
     if (index < this.tokens.length) {
       if (moveIndex) {
@@ -2293,7 +2354,7 @@
    * @param {boolean} moveIndex Следует ли переместить указатель к
    *  предыдущему токену (в противном случае следующий вызов prevToken вернет
    *  тот же результат)
-   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
    *  итерироваться.
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
    *  токены со всеми типами, за исключением перечисленных в filter.
@@ -2301,10 +2362,32 @@
    *  позади нет.
    */
   Tokens.prototype.prevToken = function(moveIndex, filter, exclude) {
+    var types = filter || {};
+    var exclusive = false;
+    if ('length' in filter) {
+      types = {};
+      for (var i = 0; i < filter.length; i++) {
+        types[filter[i]] = true;
+      }
+    } else {
+      exclusive = exclude;
+      exclude = false;
+    }
     var index = this.index;
     index--;
-    while (index >= 0 && filter && (filter.indexOf(this.tokens[index].type) != -1) == exclude) {
-      index--;
+    while (index >= 0) {
+      if (this.tokens[index].type in types) {
+        if (types[this.tokens[index].type] != exclude) {
+          index--;
+        } else {
+          break;
+        }
+      } else
+      if (!exclusive) {
+        index--;
+      } else {
+        break;
+      }
     }
     if (index >= 0) {
       if (moveIndex) {
@@ -2330,7 +2413,7 @@
   /**
    * Проверяет, есть ли впереди текущей позиции токены, удовлетворяющие фильтру.
    *
-   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
    *  итерироваться.
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
    *  токены со всеми типами, за исключением перечисленных в filter.
@@ -2344,7 +2427,7 @@
   /**
    * Проверяет, есть ли позади текущей позиции токены, удовлетворяющие фильтру.
    *
-   * @param {String[]} [filter] Список типов токенов, по которым нужно
+   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
    *  итерироваться.
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
    *  токены со всеми типами, за исключением перечисленных в filter.
