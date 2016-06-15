@@ -80,7 +80,7 @@
 </head>
 <body style="padding: 20px">
   <div class="uk-grid uk-form">
-    <div class="uk-width-1-2">
+    <div class="uk-width-large-1-2">
       <h3>Текст для токенизации</h3>
       <textarea id="text" class="pure-input-1" style="height: 270px; width: 100%" placeholder="Текст для разбора">Текст (от лат. textus — «ткань; сплетение, связь, паутина, сочетание») — зафиксированная на каком-либо материальном носителе человеческая мысль; в общем плане связная и полная последовательность символов.
 
@@ -91,7 +91,7 @@
       <h3>Легенда</h3>
       <p class="uk-clearfix" style="margin-bottom: 20px" id="tokensLegend"></p>
     </div>
-    <div class="uk-width-1-2">
+    <div class="uk-width-large-1-2">
       <h3>Результат токенизации</h3>
       <div id="tokensResults"></div>
     </div>
@@ -100,8 +100,8 @@
   <hr/>
 
   <div class="uk-form">
-    <h3>Слово для разбора<br/><small>(можно кликать по кириллическим токенам сверху)</small></h3>
-    <input id="word" type="text" style="width: 50%" placeholder="Слово для разбора">
+    <h3>Слово для морфологического разбора<br/><small>(можно кликать по кириллическим токенам сверху)</small></h3>
+    <input id="word" type="text" style="width: 50%" placeholder="Слово для разбора" value="варкалось">
   </div>
 
   <h3>Результаты разбора</h3>
@@ -115,8 +115,8 @@
       el.style.display = (el.style.display == 'none') ? 'table-row' : 'none';
     }
     Az.Morph.init('../dicts', function(err, Morph) {
-      //Morph('слово');
       document.getElementById('word').addEventListener('keyup', updateMorph, false);
+      updateMorph();
     });
 
     function updateMorph() {
@@ -135,7 +135,7 @@
           '<tr><td width="40%">Устранено опечаток</td><td>' + (variants[i].typosCnt || 0) + '</td></tr>');
         if (variants[i].formCnt) {
           html.push(
-            '<tr><td colspan="2"><a href="#" onclick="showAll(' + i + '); return false;">Показать все формы (' + variants[i].formCnt + ')</a></td></tr>' +
+            '<tr><td colspan="2"><a href="#" onclick="showAll(' + i + '); return false;">Показать всю парадигму (' + variants[i].formCnt + ' ' + Az.Morph('форма')[0].pluralize(variants[i].formCnt) + ')</a></td></tr>' +
             '<tr id="allForms' + i + '" style="display: none"><td colspan="2" style="padding: 0"><table class="uk-table uk-table-condensed" style="font-size: 13px; margin-bottom: 0px">');
           for (var formIdx = 0; formIdx < variants[i].formCnt; formIdx++) {
             var form = variants[i].inflect(formIdx);
@@ -152,7 +152,9 @@
     }
 
 
-    var types = ['SPACE', 'WORD', 'NUMBER', 'PUNCT', 'LINK', 'EMAIL', 'HASHTAG', 'MARKUP', 'TAG', 'CONTENT', 'OTHER'];
+    var types = ['SPACE', 'WORD', 'NUMBER', 'PUNCT', 'LINK', 'EMAIL', 'HASHTAG', 'MARKUP', 'TAG', 'CONTENT', 'OTHER'].map(function(type) {
+      return Az.Tokens[type];
+    });
     var html = types.map(function(type) {
       return '<span style="white-space: nowrap; float: left;"><input id="filter-' + type + '" type="checkbox" checked onchange="update()" style="margin-left: 10px"/><span class="token token-' + type + '" style="cursor: default">' + type + '</span></span>';
     });
@@ -165,15 +167,15 @@
           incl.push(types[i]);
         }
       }
-      if (incl.indexOf('CYRIL') > -1 || incl.indexOf('LATIN') > -1) {
-        incl.push('WORD');
+      if (incl.indexOf(Az.Tokens.CYRIL) > -1 || incl.indexOf(Az.Tokens.LATIN) > -1) {
+        incl.push(Az.Tokens.WORD);
       }
 
       html = tokens.done(incl, false).map(function(token, i) {
-        if (token.type == 'WORD' && token.subType == 'CYRIL') {
-          return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.s.split('\'').join('\\\'') + '\');" style="cursor: pointer">' + token.s.split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
+        if ((token.type === Az.Tokens.WORD) && (token.subType === Az.Tokens.CYRIL)) {
+          return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.toString().split('\'').join('\\\'') + '\');" style="cursor: pointer">' + token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
         }
-        return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + token.s.split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
+        return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
       });
 
       document.getElementById('tokensResults').innerHTML = html.join('') + '<p>Токенизация выполнена за ' + (timeEn - timeSt) + 'мс, всего ' + tokens.tokens.length + ' токенов</p>';

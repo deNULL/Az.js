@@ -25,7 +25,7 @@
           // Слова с дефисами
           'HyphenParticle', 'HyphenAdverb', 'HyphenWords',
           // Предсказатели по префиксам/суффиксам
-          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown'
+          'PrefixKnown', 'PrefixUnknown?', 'SuffixKnown?', 'Abbr'
         ],
         forceParse: false,
         normalizeScore: true
@@ -169,7 +169,7 @@
     // Match to another tag
     for (var i = 0; i < grammemes.length; i++) {
       if (tag[grammemes[i]] != this[grammemes[i]]) {
-        // Special case: tag.CAse 
+        // Special case: tag.CAse
         return false;
       }
     }
@@ -177,10 +177,14 @@
   }
 
   Tag.prototype.isProductive = function() {
-    return !(this.NUMR || this.NPRO || this.PRED || this.PREP || 
-      this.CONJ || this.PRCL || this.INTJ || this.Apro || 
+    return !(this.NUMR || this.NPRO || this.PRED || this.PREP ||
+      this.CONJ || this.PRCL || this.INTJ || this.Apro ||
       this.NUMB || this.ROMN || this.LATN || this.PNCT ||
       this.UNKN);
+  }
+
+  Tag.prototype.isCapitalized = function() {
+    return this.Name || this.Surn || this.Patr || this.Geox || this.Init;
   }
 
   function makeTag(tagInt, tagExt) {
@@ -218,10 +222,10 @@
    * опечаток в слове.
    *
    *  Опечаткой считается:
-   *   - лишняя буква в слове
-   *   - (пропущенная буква в слове) (TODO: пока не работает)
-   *   - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
-   *   - переставленные местами соседние буквы
+   *  - лишняя буква в слове
+   *  - пропущенная буква в слове (TODO: самый медленный тип опечаток, стоит сделать опциональным)
+   *  - не та буква в слове (если правильная буква стоит рядом на клавиатуре)
+   *  - переставленные местами соседние буквы
    *
    *  0 или false чтобы отключить.
    *
@@ -276,18 +280,38 @@
     }
 
     var total = 0;
-    var probs = [];
     for (var i = 0; i < parses.length; i++) {
-      var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
-      if (res && res[0]) {
-        parses[i].score = (res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt);
+      if (parses[i].parser == 'Dictionary') {
+        var res = probabilities.findAll(parses[i] + ':' + parses[i].tag);
+        if (res && res[0]) {
+          parses[i].score = (res[0][1] / 1000000) * getDictionaryScore(parses[i].stutterCnt, parses[i].typosCnt);
+          total += parses[i].score;
+        }
       }
-      total += parses[i].score;
     }
 
-    if (total > 0 && config.normalizeScore) {
+    // Normalize Dictionary & non-Dictionary scores separately
+    if (config.normalizeScore) {
+      if (total > 0) {
+        for (var i = 0; i < parses.length; i++) {
+          if (parses[i].parser == 'Dictionary') {
+            parses[i].score /= total;
+          }
+        }
+      }
+
+      total = 0;
       for (var i = 0; i < parses.length; i++) {
-        parses[i].score /= total;
+        if (parses[i].parser != 'Dictionary') {
+          total += parses[i].score;
+        }
+      }
+      if (total > 0) {
+        for (var i = 0; i < parses.length; i++) {
+          if (parses[i].parser != 'Dictionary') {
+            parses[i].score /= total;
+          }
+        }
       }
     }
 
@@ -346,6 +370,47 @@
    */
   Parse.prototype.inflect = function(tag, grammemes) {
     return this;
+  }
+
+  /**
+   * Приводит слово к форме, согласующейся с указанным числом.
+   * Вместо конкретного числа можно указать категорию (согласно http://www.unicode.org/cldr/charts/29/supplemental/language_plural_rules.html).
+   *
+   * @param {number|string} number Число, с которым нужно согласовать данное слово или категория, описывающая правило построения множественного числа.
+   * @returns {Parse|False} Разбор, соответствующий указанному числу или False,
+   *  если произвести согласование не удалось.
+   */
+  Parse.prototype.pluralize = function(number) {
+    if (!this.tag.NOUN && !this.tag.ADJF && !this.tag.PRTF) {
+      return this;
+    }
+
+    if (typeof number == 'number') {
+      number = number % 100;
+      if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
+        number = 'many';
+      } else
+      if (number % 10 == 1) {
+        number = 'one';
+      } else {
+        number = 'few';
+      }
+    }
+
+    if (this.tag.NOUN && !this.tag.nomn && !this.tag.accs) {
+      return this.inflect([number == 'one' ? 'sing' : 'plur', this.tag.CAse]);
+    } else
+    if (number == 'one') {
+      return this.inflect(['sing', this.tag.nomn ? 'nomn' : 'accs'])
+    } else
+    if (this.tag.NOUN && (number == 'few')) {
+      return this.inflect(['sing', 'gent']);
+    } else
+    if ((this.tag.ADJF || this.tag.PRTF) && this.tag.femn && (number == 'few')) {
+      return this.inflect(['plur', 'nomn']);
+    } else {
+      return this.inflect(['plur', 'gent']);
+    }
   }
 
   /**
@@ -409,7 +474,7 @@
     this.tag = tags[this.paradigm[this.formCnt + formIdx]];
     this.stutterCnt = stutterCnt || 0;
     this.typosCnt = typosCnt || 0;
-    this.score = getDictionaryScore(stutterCnt, typosCnt);
+    this.score = getDictionaryScore(this.stutterCnt, this.typosCnt);
     this.prefix = prefix || '';
     this.suffix = suffix || '';
   }
@@ -463,13 +528,13 @@
     console.log(prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
     console.log(this.tag.ext.toString());
     var norm = this.normalize();
-    console.log('=> ', norm[0] + ' (' + norm[1].ext.toString() + ')');
-    var norm = this.normalize(true);
-    console.log('=> ', norm[0] + ' (' + norm[1].ext.toString() + ')');
-    console.groupCollapsed('Все формы: ' + len);
+    console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
+    norm = this.normalize(true);
+    console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
+    console.groupCollapsed('Все формы: ' + this.formCnt);
     for (var formIdx = 0; formIdx < this.formCnt; formIdx++) {
       var form = this.inflect(formIdx);
-      console.log(form[0] + ' (' + form[1].ext.toString() + ')');
+      console.log(form + ' (' + form.tag.ext.toString() + ')');
     }
     console.groupEnd();
     console.groupEnd();
@@ -521,6 +586,10 @@
 
   __init.push(function() {
     Morph.Parsers.Dictionary = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
 
       var opts = lookup(words, word, config);
@@ -534,16 +603,78 @@
             opts[i][1][j][1],
             opts[i][2],
             opts[i][3]);
-          vars.push(w);
+          if (config.ignoreCase || !w.tag.isCapitalized() || isCapitalized) {
+            vars.push(w);
+          }
         }
+      }
+      return vars;
+    }
+
+    var abbrTags = [];
+    for (var i = 0; i <= 2; i++) {
+      for (var j = 0; j <= 5; j++) {
+        for (var k = 0; k <= 1; k++) {
+          abbrTags.push(makeTag(
+            'NOUN,inan,' + ['masc', 'femn', 'neut'][i] + ',Fixd,Abbr ' + ['sing', 'plur'][k] + ',' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
+            'СУЩ,неод,' + ['мр', 'жр', 'ср'][i] + ',0,аббр ' + ['ед', 'мн'][k] + ',' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
+          ));
+        }
+      }
+    }
+
+    // Произвольные аббревиатуры (несклоняемые)
+    // ВК, ЖК, ССМО, ОАО, ЛенСпецСМУ
+    Morph.Parsers.Abbr = function(word, config) {
+      // Однобуквенные считаются инициалами и для них заведены отдельные парсеры
+      if (word.length < 2) {
+        return [];
+      }
+      // Дефисов в аббревиатуре быть не должно
+      if (word.indexOf('-') > -1) {
+        return [];
+      }
+      // Первая буква должна быть заглавной: сокращения с маленькой буквы (типа iOS) мало распространены
+      // Последняя буква должна быть заглавной: иначе сокращение, вероятно, склоняется
+      if ((initials.indexOf(word[0]) > -1) && (initials.indexOf(word[word.length - 1]) > -1)) {
+        var caps = 0;
+        for (var i = 0; i < word.length; i++) {
+          if (initials.indexOf(word[i]) > -1) {
+            caps++;
+          }
+        }
+        if (caps <= 5) {
+          var vars = [];
+          for (var i = 0; i < abbrTags.length; i++) {
+            var w = new Parse(word, abbrTags[i], 0.5);
+            vars.push(w);
+          }
+          return vars;
+        }
+      }
+      // При игнорировании регистра разбираем только короткие аббревиатуры
+      // (и требуем, чтобы каждая буква была «инициалом», т.е. без мягких/твердых знаков)
+      if (!config.ignoreCase || (word.length > 5)) {
+        return [];
+      }
+      word = word.toLocaleUpperCase();
+      for (var i = 0; i < word.length; i++) {
+        if (initials.indexOf(word[i]) == -1) {
+          return [];
+        }
+      }
+      var vars = [];
+      for (var i = 0; i < abbrTags.length; i++) {
+        var w = new Parse(word, abbrTags[i], 0.2);
+        vars.push(w);
       }
       return vars;
     }
 
     var InitialsParser = function(isPatronymic, score) {
       var initialsTags = [];
-      for (var i = 0; i < 1; i++) {
-        for (var j = 0; j < 6; j++) {
+      for (var i = 0; i <= 1; i++) {
+        for (var j = 0; j <= 5; j++) {
           initialsTags.push(makeTag(
             'NOUN,anim,' + ['masc', 'femn'][i] + ',Sgtm,Name,Fixd,Abbr,Init sing,' + ['nomn', 'gent', 'datv', 'accs', 'ablt', 'loct'][j],
             'СУЩ,од,' + ['мр', 'жр'][i] + ',sg,имя,0,аббр,иниц ед,' + ['им', 'рд', 'дт', 'вн', 'тв', 'пр'][j]
@@ -609,7 +740,7 @@
       makeTag('ROMN', 'РИМ'), 0.9);
 
     Morph.Parsers.Latin = RegexpParser(
-      /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]/,
+      /[A-Za-z\u00C0-\u00D6\u00D8-\u00f6\u00f8-\u024f]$/,
       makeTag('LATN', 'ЛАТ'), 0.9);
 
     // слово + частица
@@ -682,7 +813,8 @@
     Morph.Parsers.HyphenWords = function(word, config) {
       word = word.toLocaleLowerCase();
       for (var i = 0; i < knownPrefixes.length; i++) {
-        if (word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
+        if (knownPrefixes[i][knownPrefixes[i].length - 1] == '-' &&
+            word.substr(0, knownPrefixes[i].length) == knownPrefixes[i]) {
           return [];
         }
       }
@@ -730,12 +862,16 @@
           parses.push(right[j]);
         }
       }
-      
+
       return parses;
     }
 
 
     Morph.Parsers.PrefixKnown = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
       for (var i = 0; i < knownPrefixes.length; i++) {
@@ -750,6 +886,9 @@
             if (!right[j].tag.isProductive()) {
               continue;
             }
+            if (!config.ignoreCase && right[j].tag.isCapitalized() && !isCapitalized) {
+              continue;
+            }
             right[j].score *= 0.7;
             right[j].prefix = knownPrefixes[i];
             parses.push(right[j]);
@@ -760,6 +899,10 @@
     }
 
     Morph.Parsers.PrefixUnknown = function(word, config) {
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
       for (var len = 1; len <= 5; len++) {
@@ -772,6 +915,9 @@
           if (!right[j].tag.isProductive()) {
             continue;
           }
+          if (!config.ignoreCase && right[j].tag.isCapitalized() && !isCapitalized) {
+            continue;
+          }
           right[j].score *= 0.3;
           right[j].prefix = word.substr(0, len);
           parses.push(right[j]);
@@ -780,19 +926,26 @@
       return parses;
     }
 
+    // Отличие от предсказателя по суффиксам в pymorphy2: найдя подходящий суффикс, проверяем ещё и тот, что на символ короче
     Morph.Parsers.SuffixKnown = function(word, config) {
       if (word.length < 4) {
         return [];
       }
+      var isCapitalized =
+        !config.ignoreCase && word.length &&
+        (word[0].toLocaleLowerCase() != word[0]) &&
+        (word.substr(1).toLocaleUpperCase() != word.substr(1));
       word = word.toLocaleLowerCase();
       var parses = [];
+      var minlen = 1;
+      var coeffs = [0, 0.2, 0.3, 0.4, 0.5, 0.6];
+      var used = {};
       for (var i = 0; i < prefixes.length; i++) {
         if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
           continue;
         }
-        var max = 1;
         var base = word.substr(prefixes[i].length);
-        for (var len = 5; len >= 1; len--) {
+        for (var len = 5; len >= minlen; len--) {
           if (len >= base.length) {
             continue;
           }
@@ -804,6 +957,7 @@
           }
 
           var p = [];
+          var max = 1;
           for (var j = 0; j < entries.length; j++) {
             var suffix = entries[j][0];
             var stats = entries[j][1];
@@ -817,10 +971,17 @@
               if (!parse.tag.isProductive()) {
                 continue;
               }
-              // TODO: ignore duplicates
+              if (!config.ignoreCase && parse.tag.isCapitalized() && !isCapitalized) {
+                continue;
+              }
+              var key = parse.toString() + ':' + stats[k][1] + ':' + stats[k][2];
+              if (key in used) {
+                continue;
+              }
               max = Math.max(max, stats[k][0]);
-              parse.score = stats[k][0] * 0.5;
+              parse.score = stats[k][0] * coeffs[len];
               p.push(parse);
+              used[key] = true;
             }
           }
           if (p.length > 0) {
@@ -828,7 +989,8 @@
               p[j].score /= max;
             }
             parses = parses.concat(p);
-            break;
+            // Check also suffixes 1 letter shorter
+            minlen = Math.max(len - 1, 1);
           }
         }
       }
