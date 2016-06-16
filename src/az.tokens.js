@@ -760,6 +760,33 @@
     }
     return list;
   }
+  
+  /**
+   * Возвращает токен по его индексу.
+   *
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
+   * @returns {Token|False} Токен или false, если индекс вышел за пределы массива токенов.
+   */
+  Tokens.prototype.get = function(index, filter, exclude) {
+    if (index < 0) {
+      return false;
+    }
+    if (!filter) {
+      return this.tokens[index];
+    }
+    var matcher = getMatcher(filter, exclude);
+    var idx = 0;
+    for (var i = 0; i < this.tokens.length; i++) {
+      if (matcher(this.tokens[i], i, this.tokens)) {
+        if (idx == index) {
+          return this.tokens[i];
+        }
+        idx++;
+      }
+    }
+    return false;
+  }
 
   /**
    * Подсчитывает текущее количество токенов.
