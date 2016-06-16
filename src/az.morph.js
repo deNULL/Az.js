@@ -463,11 +463,7 @@
   }
 
   function getDictionaryScore(stutterCnt, typosCnt) {
-    // = 1.0 if no stutter/typos
-    // = 0.3 if any number of stutter or 1 typo
-    // = 0.09 if 2 typos
-    // = 0.027 if 3 typos
-    return Math.pow(0.3, Math.min(stutterCnt, 1) + typosCnt);
+    return Math.pow(0.3, typosCnt) * Math.pow(0.6, Math.min(stutterCnt, 1));
   }
 
   var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt, prefix, suffix) {
@@ -870,7 +866,6 @@
 
       return parses;
     }
-
 
     Morph.Parsers.PrefixKnown = function(word, config) {
       var isCapitalized =
