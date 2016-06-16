@@ -21,7 +21,16 @@
             callback(null, JSON.parse(data));
           } else
           if (responseType == 'arraybuffer') {
-            callback(null, data.buffer);
+            if (data.buffer) {
+              callback(null, data.buffer);
+            } else {
+              var ab = new ArrayBuffer(data.length);
+              var view = new Uint8Array(ab);
+              for (var i = 0; i < data.length; ++i) {
+                  view[i] = data[i];
+              }
+              callback(null, ab);
+            }
           } else {
             callback(new Error('Unknown responseType'));
           }
@@ -451,7 +460,8 @@
       ],
       autoTypos = [4, 9],
       UNKN,
-      __init = [];
+      __init = [],
+      initialized = false;
 
   // Взято из https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
   function deepFreeze(obj) {
@@ -651,6 +661,10 @@
    * @memberof Az
    */
   var Morph = function(word, config) {
+    if (!initialized) {
+      throw new Error('Please call Az.Morph.init() before using this module.');
+    }
+
     config = config ? Az.extend(defaults, config) : defaults;
 
     var parses = [];
@@ -1436,6 +1450,7 @@
         for (var i = 0; i < __init.length; i++) {
           __init[i]();
         }
+        initialized = true;
         callback && callback(null, Morph);
       }
     }
@@ -1451,6 +1466,10 @@
 
     loading++;
     Az.DAWG.load(path + '/words.dawg', 'words', function(err, dawg) {
+      if (err) {
+        callback(err);
+        return;
+      }
       words = dawg;
       loaded();
     });
@@ -1459,6 +1478,10 @@
       (function(prefix) {
         loading++;
         Az.DAWG.load(path + '/prediction-suffixes-' + prefix + '.dawg', 'probs', function(err, dawg) {
+          if (err) {
+            callback(err);
+            return;
+          }
           predictionSuffixes[prefix] = dawg;
           loaded();
         });
@@ -1467,12 +1490,20 @@
 
     loading++;
     Az.DAWG.load(path + '/p_t_given_w.intdawg', 'int', function(err, dawg) {
+      if (err) {
+        callback(err);
+        return;
+      }
       probabilities = dawg;
       loaded();
     });
 
     loading++;
     Az.load(path + '/grammemes.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       grammemes = {};
       for (var i = 0; i < json.length; i++) {
         grammemes[json[i][0]] = grammemes[json[i][2]] = {
@@ -1487,24 +1518,41 @@
 
     loading++;
     Az.load(path + '/gramtab-opencorpora-int.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       tagsInt = json;
       loaded();
     });
 
     loading++;
     Az.load(path + '/gramtab-opencorpora-ext.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       tagsExt = json;
       loaded();
     });
 
     loading++;
     Az.load(path + '/suffixes.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       suffixes = json;
       loaded();
     });
 
     loading++;
     Az.load(path + '/paradigms.array', 'arraybuffer', function(err, data) {
+      if (err) {
+        callback(err);
+        return;
+      }
+      
       var list = new Uint16Array(data),
           count = list[0],
           pos = 1;
@@ -2208,11 +2256,75 @@
     return this;
   }
 
+  function alwaysTrue() {
+    return true;
+  }
+
+  function getMatcher(filter, exclude) {
+    if (!filter) {
+      return alwaysTrue();
+    }
+    if (typeof filter == 'function') {
+      return filter;
+    }
+    var types = filter;
+    var exclusive;
+    if ('length' in filter) {
+      exclusive = !exclude;
+      types = {};
+      for (var i = 0; i < filter.length; i++) {
+        types[filter[i]] = true;
+      }
+    } else {
+      exclusive = exclude;
+      exclude = false;
+    }
+    return function(token, index, array) {
+      if (token.subType) {
+        var sub = token.type + '.' + token.subType;
+        if (sub in types) {
+          return types[sub] != exclude;
+        }
+      }
+      if (token.type in types) {
+        return types[token.type] != exclude;
+      } else {
+        return !exclusive;
+      }
+    }
+  }
+
   /**
    * Завершает токенизацию, возвращая список токенов.
    *
-   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
-   *  отфильтровать результат.
+   * Эта и другие функции принимают последними параметрами filter и флаг exclude. Они
+   * служат для фильтрации токенов (потому что часто удобнее получать не все токены, а
+   * только определенную часть из них).
+   *
+   * Если в filter передана функция, то параметр exclude игнорируется, а filter вызывается
+   * аналогично коллбэку в методе Array.prototype.filter: ей передаются параметры
+   * token, index, array (текущий токен, его индекс и общий список токенов). Будут
+   * возвращены только токены, для которых функция вернет истинное значение.
+   *
+   * Если в filter передан массив (или объект с полем length), то возвращаются токены, типы
+   * которых либо входят в этот массив (exclude=false), либо не входят в него (exclude=true).
+   * Вместо типов можно использовать строки вида 'WORD.LATIN' (тип, символ «точка» и подтип).
+   *
+   * Если в filter передать объект, то ключами в нём должны быть типы токенов, а значениями -
+   * true или false в зависимости от того, включать такие токены в ответ или нет. Как и в случае случае
+   * с массивом, в качестве ключей можно использовать строки вида 'WORD.LATIN'.
+   * Здесь параметр exclude означает, следует ли ограничить выдачу только теми типами, которые
+   * перечислены в filter.
+   * Значения с указанием подтипа имеют больший приоритет, чем просто типы. Благодаря этому можно
+   * делать такие странные вещи:
+   *
+   * ```
+   * t.done({ 'WORD': false, 'WORD.LATIN': true }, false);
+   * ```
+   * (то есть вернуть все теги, кроме тегов с типом WORD, но включить теги с подтипом LATIN)
+   *
+   * @param {Function|String[]|Object} [filter] Типы токенов, по которым нужно
+   *  отфильтровать результат (или функция для фильтрации).
    * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
    *  токены со всеми типами, за исключением перечисленных в filter.
    * @returns {Token[]} Список токенов после фильтрации.
@@ -2223,25 +2335,10 @@
     if (!filter) {
       return this.tokens;
     }
-    var types = filter;
-    var exclusive = false;
-    if ('length' in filter) {
-      types = {};
-      for (var i = 0; i < filter.length; i++) {
-        types[filter[i]] = true;
-      }
-    } else {
-      exclusive = exclude;
-      exclude = false;
-    }
+    var matcher = getMatcher(filter, exclude);
     var list = [];
     for (var i = 0; i < this.tokens.length; i++) {
-      if (this.tokens[i].type in types) {
-        if (types[this.tokens[i].type] != exclude) {
-          list.push(this.tokens[i]);
-        }
-      } else
-      if (!exclusive) {
+      if (matcher(this.tokens[i], i, this.tokens)) {
         list.push(this.tokens[i]);
       }
     }
@@ -2251,35 +2348,18 @@
   /**
    * Подсчитывает текущее количество токенов.
    *
-   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
-   *  отфильтровать результат.
-   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. подсчитываются
-   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
    * @returns {Number} Число токенов после фильтрации.
    */
   Tokens.prototype.count = function(filter, exclude) {
     if (!filter) {
       return this.tokens.length;
     }
-    var types = filter;
-    var exclusive = false;
-    if ('length' in filter) {
-      types = {};
-      for (var i = 0; i < filter.length; i++) {
-        types[filter[i]] = true;
-      }
-    } else {
-      exclusive = exclude;
-      exclude = false;
-    }
+    var matcher = getMatcher(filter, exclude);
     var count = 0;
     for (var i = 0; i < this.tokens.length; i++) {
-      if (this.tokens[i].type in types) {
-        if (types[this.tokens[i].type] != exclude) {
-          count++;
-        }
-      } else
-      if (!exclusive) {
+      if (matcher(this.tokens[i], i, this.tokens)) {
         count++;
       }
     }
@@ -2292,40 +2372,17 @@
    * @param {boolean} moveIndex Следует ли переместить указатель к
    *  следующему токену (в противном случае следующий вызов nextToken вернет
    *  тот же результат)
-   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
-   *  итерироваться.
-   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
-   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
    * @returns {Token|null} Следующий токен или null, если подходящих токенов
    *  впереди нет.
    */
   Tokens.prototype.nextToken = function(moveIndex, filter, exclude) {
-    var types = filter || {};
-    var exclusive = false;
-    if ('length' in filter) {
-      types = {};
-      for (var i = 0; i < filter.length; i++) {
-        types[filter[i]] = true;
-      }
-    } else {
-      exclusive = exclude;
-      exclude = false;
-    }
+    var matcher = getMatcher(filter, exclude);
     var index = this.index;
     index++;
-    while (index < this.tokens.length) {
-      if (this.tokens[index].type in types) {
-        if (types[this.tokens[index].type] != exclude) {
-          index++;
-        } else {
-          break;
-        }
-      } else
-      if (!exclusive) {
-        index++;
-      } else {
-        break;
-      }
+    while (index < this.tokens.length && matcher(this.tokens[index], index, this.tokens)) {
+      index++;
     }
     if (index < this.tokens.length) {
       if (moveIndex) {
@@ -2354,40 +2411,17 @@
    * @param {boolean} moveIndex Следует ли переместить указатель к
    *  предыдущему токену (в противном случае следующий вызов prevToken вернет
    *  тот же результат)
-   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
-   *  итерироваться.
-   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. возвращаются
-   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
    * @returns {Token|null} Предыдущий токен или null, если подходящих токенов
    *  позади нет.
    */
   Tokens.prototype.prevToken = function(moveIndex, filter, exclude) {
-    var types = filter || {};
-    var exclusive = false;
-    if ('length' in filter) {
-      types = {};
-      for (var i = 0; i < filter.length; i++) {
-        types[filter[i]] = true;
-      }
-    } else {
-      exclusive = exclude;
-      exclude = false;
-    }
+    var matcher = getMatcher(filter, exclude);
     var index = this.index;
     index--;
-    while (index >= 0) {
-      if (this.tokens[index].type in types) {
-        if (types[this.tokens[index].type] != exclude) {
-          index--;
-        } else {
-          break;
-        }
-      } else
-      if (!exclusive) {
-        index--;
-      } else {
-        break;
-      }
+    while (index >= 0 && matcher(this.tokens[index], index, this.tokens)) {
+      index--;
     }
     if (index >= 0) {
       if (moveIndex) {
@@ -2413,10 +2447,8 @@
   /**
    * Проверяет, есть ли впереди текущей позиции токены, удовлетворяющие фильтру.
    *
-   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
-   *  итерироваться.
-   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
-   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
    * @returns {boolean} True если впереди есть хотя бы один подходящий токен,
    *  и False в противном случае.
    */
@@ -2427,10 +2459,8 @@
   /**
    * Проверяет, есть ли позади текущей позиции токены, удовлетворяющие фильтру.
    *
-   * @param {String[]|Object} [filter] Список типов токенов, по которым нужно
-   *  итерироваться.
-   * @param {boolean} [exclude=False] Инвертирует фильтр, т.е. учитываются
-   *  токены со всеми типами, за исключением перечисленных в filter.
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
    * @returns {boolean} True если позади есть хотя бы один подходящий токен,
    *  и False в противном случае.
    */

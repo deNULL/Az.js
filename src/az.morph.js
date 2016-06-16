@@ -49,7 +49,8 @@
       ],
       autoTypos = [4, 9],
       UNKN,
-      __init = [];
+      __init = [],
+      initialized = false;
 
   // Взято из https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Object/freeze
   function deepFreeze(obj) {
@@ -249,6 +250,10 @@
    * @memberof Az
    */
   var Morph = function(word, config) {
+    if (!initialized) {
+      throw new Error('Please call Az.Morph.init() before using this module.');
+    }
+
     config = config ? Az.extend(defaults, config) : defaults;
 
     var parses = [];
@@ -1034,6 +1039,7 @@
         for (var i = 0; i < __init.length; i++) {
           __init[i]();
         }
+        initialized = true;
         callback && callback(null, Morph);
       }
     }
@@ -1049,6 +1055,10 @@
 
     loading++;
     Az.DAWG.load(path + '/words.dawg', 'words', function(err, dawg) {
+      if (err) {
+        callback(err);
+        return;
+      }
       words = dawg;
       loaded();
     });
@@ -1057,6 +1067,10 @@
       (function(prefix) {
         loading++;
         Az.DAWG.load(path + '/prediction-suffixes-' + prefix + '.dawg', 'probs', function(err, dawg) {
+          if (err) {
+            callback(err);
+            return;
+          }
           predictionSuffixes[prefix] = dawg;
           loaded();
         });
@@ -1065,12 +1079,20 @@
 
     loading++;
     Az.DAWG.load(path + '/p_t_given_w.intdawg', 'int', function(err, dawg) {
+      if (err) {
+        callback(err);
+        return;
+      }
       probabilities = dawg;
       loaded();
     });
 
     loading++;
     Az.load(path + '/grammemes.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       grammemes = {};
       for (var i = 0; i < json.length; i++) {
         grammemes[json[i][0]] = grammemes[json[i][2]] = {
@@ -1085,24 +1107,41 @@
 
     loading++;
     Az.load(path + '/gramtab-opencorpora-int.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       tagsInt = json;
       loaded();
     });
 
     loading++;
     Az.load(path + '/gramtab-opencorpora-ext.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       tagsExt = json;
       loaded();
     });
 
     loading++;
     Az.load(path + '/suffixes.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
       suffixes = json;
       loaded();
     });
 
     loading++;
     Az.load(path + '/paradigms.array', 'arraybuffer', function(err, data) {
+      if (err) {
+        callback(err);
+        return;
+      }
+      
       var list = new Uint16Array(data),
           count = list[0],
           pos = 1;

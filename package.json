@@ -1,6 +1,6 @@
 {
   "name": "az",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "A NLP library for Russian language",
   "main": "dist/az.js",
   "scripts": {
