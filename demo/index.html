@@ -25,16 +25,16 @@
       cursor: default;
     }
     /* Simple tokens */
-    .token-CYRIL, .token-WORD {
+    .token-CYRIL, .token-WORD, .morph-ADJF {
       background: #FFBFBF;
     }
-    .token-LATIN, .token-MIXED {
+    .token-LATIN, .token-MIXED, .morph-ADJS {
       background: #FF8686;
     }
-    .token-PUNCT {
+    .token-PUNCT, .morph-VERB {
       background: #B1BEFF;
     }
-    .token-NUMBER {
+    .token-NUMBER, .morph-NOUN {
       background: #A1EF82;;
     }
     .token-SPACE {
@@ -45,28 +45,57 @@
       color: #FFF;
     }
 
-    .token-LINK {
+    .token-LINK, .morph-INFN {
       background: #1E1AFF;
       color: #FFF;
     }
-    .token-EMAIL {
+    .token-EMAIL, .morph-PRTF {
       background: #13B5DA;
       color: #FFF;
     }
-    .token-HASHTAG {
+    .morph-PRTS {
+      background: #0784a0;
+      color: #FFF;
+    }
+    .token-HASHTAG, .morph-GRND {
       background: #9C2FFF;
       color: #FFF;
     }
-    .token-MARKUP {
+    .token-MARKUP, .morph-NUMR {
       background: #2D9812;
       color: #FFF;
     }
-    .token-TAG {
+    .token-TAG, .morph-PREP {
       background: #F79F00;
       color: #FFF;
     }
-    .token-CONTENT {
+    .token-CONTENT, .morph-CONJ {
       background: #BFBF00;
+      color: #FFF;
+    }
+    .morph-COMP {
+      background: #ce5974;
+      color: #FFF;
+    }
+    .morph-ADVB {
+      background: #64edd4;
+    }
+    .morph-NPRO {
+      background: #97de49;
+    }
+    .morph-PRED {
+      background: #a93f92;
+      color: #FFF;
+    }
+    .morph-PRCL {
+      background: #fbeb2b;
+    }
+    .morph-INTJ {
+      background: #ff7818;
+      color: #FFF;
+    }
+    .morph-LATN {
+      background: #333;
       color: #FFF;
     }
     .parse > div {
@@ -92,7 +121,7 @@
       <p class="uk-clearfix" style="margin-bottom: 20px" id="tokensLegend"></p>
     </div>
     <div class="uk-width-large-1-2">
-      <h3>Результат токенизации</h3>
+      <h3 id="resultsHeader"></h3>
       <div id="tokensResults"></div>
     </div>
   </div>
@@ -110,6 +139,7 @@
   </div>
 
   <script>
+    var morphMode = false;
     function showAll(variantId) {
       var el = document.getElementById('allForms' + variantId);
       el.style.display = (el.style.display == 'none') ? 'table-row' : 'none';
@@ -118,6 +148,15 @@
       document.getElementById('word').addEventListener('keyup', updateMorph, false);
       updateMorph();
     });
+
+    function toggleMode(morph) {
+      morphMode = morph;
+      document.getElementById('resultsHeader').innerHTML = 
+        morph ?
+          '<span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(false);">Результат токенизации</span> | Результат морфологического разбора' :
+          'Результат токенизации | <span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(true);">Результат морфологического разбора</span>';
+      update();
+    }
 
     function updateMorph() {
       var variants = Az.Morph(document.getElementById('word').value, { typos: 'auto' });
@@ -155,28 +194,45 @@
     var types = ['SPACE', 'WORD', 'NUMBER', 'PUNCT', 'LINK', 'EMAIL', 'HASHTAG', 'MARKUP', 'TAG', 'CONTENT', 'OTHER'].map(function(type) {
       return Az.Tokens[type];
     });
-    var html = types.map(function(type) {
-      return '<span style="white-space: nowrap; float: left;"><input id="filter-' + type + '" type="checkbox" checked onchange="update()" style="margin-left: 10px"/><span class="token token-' + type + '" style="cursor: default">' + type + '</span></span>';
-    });
-    document.getElementById('tokensLegend').innerHTML = html.join('');
-    var tokens = [], timeSt, timeEn;
+    var html, tokens = [], timeSt, timeEn;
     function update() {
       var incl = [];
       for (var i = 0; i < types.length; i++) {
-        if (document.getElementById('filter-' + types[i]).checked) {
+        if (!document.getElementById('filter-' + types[i]) || document.getElementById('filter-' + types[i]).checked) {
           incl.push(types[i]);
         }
       }
       if (incl.indexOf(Az.Tokens.CYRIL) > -1 || incl.indexOf(Az.Tokens.LATIN) > -1) {
         incl.push(Az.Tokens.WORD);
       }
+      var filtered = tokens.done(incl, false);
 
-      html = tokens.done(incl, false).map(function(token, i) {
-        if ((token.type === Az.Tokens.WORD) && (token.subType === Az.Tokens.CYRIL)) {
-          return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.toString().split('\'').join('\\\'') + '\');" style="cursor: pointer">' + token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
-        }
-        return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵') + '</span>';
-      });
+      if (morphMode) {
+        html = ['NOUN', 'NPRO', 'NUMR', 'ADJF', 'ADJS', 'COMP', 'VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'ADVB', 'PRED', 'PREP', 'CONJ', 'PRCL', 'INTJ', 'LATN'].map(function(type) {
+          return '<span style="white-space: nowrap; float: left;"><span class="token morph-' + type + '" style="cursor: default">' + type + '</span></span>';
+        });
+        document.getElementById('tokensLegend').innerHTML = html.join('');
+        html = filtered.map(function(token, i) {
+          var safe = token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
+          if (token.type === Az.Tokens.WORD) {
+            var parses = Az.Morph(token.toString());
+            return '<span class="token' + (parses.length ? ' morph-' + parses[0].tag.POST + '" title="' + parses[0].tag.toString() : '') + '" onclick="morph(\'' + token.toString().split('\'').join('\\\'') + '\');" style="cursor: pointer">' + safe + '</span>';
+          }
+          return '<span class="token token-SPACE" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + safe + '</span>';
+        });
+      } else {
+        html = types.map(function(type) {
+          return '<span style="white-space: nowrap; float: left;"><input id="filter-' + type + '" type="checkbox" checked onchange="update()" style="margin-left: 10px"/><span class="token token-' + type + '" style="cursor: default">' + type + '</span></span>';
+        });
+        document.getElementById('tokensLegend').innerHTML = html.join('');
+        html = filtered.map(function(token, i) {
+          var safe = token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
+          if ((token.type === Az.Tokens.WORD) && (token.subType === Az.Tokens.CYRIL)) {
+            return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.toString().split('\'').join('\\\'') + '\');" style="cursor: pointer">' + safe + '</span>';
+          }
+          return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + safe + '</span>';
+        });
+      }
 
       document.getElementById('tokensResults').innerHTML = html.join('') + '<p>Токенизация выполнена за ' + (timeEn - timeSt) + 'мс, всего ' + tokens.tokens.length + ' токенов</p>';
     }
@@ -193,7 +249,7 @@
       });
       timeEn = (new Date()).getTime();
 
-      update();
+      toggleMode(morphMode);
     }
     document.getElementById('text').addEventListener('keyup', tokenize, false);
     tokenize();
