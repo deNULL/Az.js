@@ -21,7 +21,16 @@
             callback(null, JSON.parse(data));
           } else
           if (responseType == 'arraybuffer') {
-            callback(null, data.buffer);
+            if (data.buffer) {
+              callback(null, data.buffer);
+            } else {
+              var ab = new ArrayBuffer(data.length);
+              var view = new Uint8Array(ab);
+              for (var i = 0; i < data.length; ++i) {
+                  view[i] = data[i];
+              }
+              callback(null, ab);
+            }
           } else {
             callback(new Error('Unknown responseType'));
           }
