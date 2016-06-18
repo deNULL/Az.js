@@ -113,7 +113,7 @@
           for (var k = 0; k < groups.length; k++) {
             var prev = groups[k];
             for (var u = 0; u < rules.length; u++) {
-              var merge = rules[u].merge(prev, group);
+              var merge = rules[u].merge(prev, group, this.groups);
               if (merge) {
                 queue.push(merge);
               }
@@ -244,7 +244,10 @@
     'об': {loct: 1, accs: 1},
     'в': {gent: 1, accs: 1, loct: 1},
     'из': {gent: 1},
-    'на': {accs: 1, loct: 1}
+    'на': {accs: 1, loct: 1},
+    'с': {gent: 1, ablt: 1},
+    'со': {gent: 1, ablt: 1}
+
   };
 
   rules.push({
@@ -274,7 +277,7 @@
 
   rules.push({
     merge: function(prev, group) {
-      if (prev.type != 'NOUN' || group.type != 'PREP-NOUN') {
+      if ((prev.type != 'NOUN' && prev.type != 'NPRO') || group.type != 'PREP-NOUN') {
         return;
       }
 
@@ -289,7 +292,22 @@
 
   rules.push({
     merge: function(prev, group) {
-      if (prev.type != 'NOUN-VERB' || group.type != 'NOUN' || !group.tag.accs) {
+      if (prev.type != 'PREP-NOUN' || group.type != 'NOUN-VERB') {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN-VERB', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        group);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'NOUN-VERB' || (group.type != 'NOUN' && group.type != 'NPRO') || !prev.tag.tran || !group.tag.accs) {
         return;
       }
 
@@ -299,6 +317,21 @@
         prev.st, group.en, 
         prev.childs.concat(group.childs), 
         prev.main);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'NOUN-VERB' || (group.type != 'NOUN' && group.type != 'NPRO') || !group.tag.datv) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN-VERB', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        prev);
     }
   });
 
@@ -336,7 +369,34 @@
     }
   });
 
+  // «красивый дом»
+  // Любая группа в кавычках
+  var quotes = {
+    '»': '«',
+    '"': '"'
+  }
+  rules.push({
+    merge: function(prev, group, groups) {
+      if (group.type != 'PNCT' || prev.isQuote || prev.st == 0 || !(group.morph.toString() in quotes)) {
+        return;
+      }
+      var pair = quotes[group.morph.toString()];
+      var pprevs = groups[prev.st - 1];
+      if (!pprevs.length || !pprevs[0].type == 'PNCT' || pprevs[0].morph.toString() != pair) {
+        return;
+      }
 
+
+      // TODO: check length?
+      var group = new SyntaxGroup(
+        prev.type, 1.0, 
+        prev.st - 1, group.en, 
+        prev.childs.concat(group.childs), 
+        prev.main);
+      group.isQuote = true;
+      return group;
+    }
+  });
 
   Syntax.prototype.done = function() {
 

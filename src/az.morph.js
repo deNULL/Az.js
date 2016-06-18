@@ -738,7 +738,7 @@
       makeTag('NUMB,real', 'ЧИСЛО,вещ'), 0.9);
 
     Morph.Parsers.Punctuation = RegexpParser(
-      /^[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^_`{|}~]+$/,
+      /^[\u2000-\u206F\u2E00-\u2E7F\\'!"«»#$%&()*+,\-.\/:;<=>?@\[\]^_`{|}~]+$/,
       makeTag('PNCT', 'ЗПР'), 0.9);
 
     Morph.Parsers.RomanNumber = RegexpParser(
