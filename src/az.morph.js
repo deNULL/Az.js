@@ -138,7 +138,7 @@
    * @returns {boolean} Является ли текущий тег согласованным с указанным.
    */
   // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
-  Tag.prototype.matches = function(tag, grammemes) {
+  Tag.prototype.matches = function(tag, grammemes, ignoreMissing) {
     if (!grammemes) {
       if (Object.prototype.toString.call(tag) === '[object Array]') {
         for (var i = 0; i < tag.length; i++) {
@@ -170,8 +170,9 @@
     // Match to another tag
     for (var i = 0; i < grammemes.length; i++) {
       if (tag[grammemes[i]] != this[grammemes[i]]) {
-        // Special case: tag.CAse
-        return false;
+        if (!ignoreMissing || ((grammemes[i] in tag) && (grammemes[i] in this))) {
+          return false;
+        }
       }
     }
     return true;

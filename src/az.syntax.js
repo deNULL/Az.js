@@ -16,7 +16,7 @@
     for (var i = 0; i < childs.length; i++) {
       this.id.push(childs[i].id);
     }
-    this.id = this.id.join('-');
+    this.id = '(' + this.id.join('-') + ')';
     if (typeof main == 'undefined') {
       this.main = childs[0];
       this.mainIndex = 0;
@@ -88,7 +88,7 @@
       var ngroups = [];
       var parses = Az.Morph(str, config);
 
-      for (var j = 0; j < Math.min(1, parses.length); j++) {
+      for (var j = 0; j < parses.length && (j < 2 || Math.abs(parses[0].score - parses[j].score) < 1e-6); j++) {
         var morph = parses[j];
         var atom = new AtomicSyntaxGroup(1.0, i, token, morph);
         var norm = morph.normalize().toString();
@@ -137,8 +137,8 @@
 
   rules.push({
     merge: function(prev, group) {
-      if (prev.tag.POST != 'NUMB') {
-        return false;
+      if (prev.type != 'NUMB') {
+        return;
       }
 
       var pval = prev.morph.toString().split(/[.,]/)[0].substr(-4);
@@ -163,12 +163,12 @@
 
   rules.push({
     merge: function(prev, group) {
-      if (prev.tag.POST != 'NUMB') {
-        return false;
+      if (prev.type != 'NUMB') {
+        return;
       }
 
       if (!(group instanceof AtomicSyntaxGroup)) {
-        return false;
+        return;
       }
 
       var norm = group.morph.normalize().toString();
@@ -187,6 +187,156 @@
       }
     }
   });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'ADJF' || group.type != 'NOUN') {
+        return;
+      }
+
+      if (!prev.tag.matches(group.tag, ['GNdr', 'NMbr', 'CAse'], true)) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        group);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'NOUN' || group.type != 'NOUN' || !group.tag.gent) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        prev);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'NOUN' || group.type != 'VERB' || !prev.tag.nomn) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN-VERB', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        group);
+    }
+  });
+
+  var preps = {
+    'к': {datv: 1},
+    'от': {gent: 1},
+    'о': {loct: 1, accs: 1},
+    'об': {loct: 1, accs: 1},
+    'в': {gent: 1, accs: 1, loct: 1},
+    'из': {gent: 1},
+    'на': {accs: 1, loct: 1}
+  };
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'PREP' || group.type != 'NOUN') {
+        return;
+      }
+
+      var pstr = prev.morph.toString();
+      if (!(pstr in preps)) {
+        console.log('not found: ' + pstr);
+        return;
+      }
+      
+      if (!(group.tag.CAse in preps[pstr])) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'PREP-NOUN', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        group);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'NOUN' || group.type != 'PREP-NOUN') {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        prev);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'NOUN-VERB' || group.type != 'NOUN' || !group.tag.accs) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN-VERB-NOUN', 1.0, 
+        prev.st, group.en, 
+        prev.childs.concat(group.childs), 
+        prev.main);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'PRTF' || group.type != 'PREP-NOUN') {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'PRTF', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        prev);
+    }
+  });
+
+  rules.push({
+    merge: function(prev, group) {
+      if (prev.type != 'PRTF' || group.type != 'NOUN') {
+        return;
+      }
+
+      if (!prev.tag.matches(group.tag, ['GNdr', 'NMbr', 'CAse'])) {
+        return;
+      }
+
+      // TODO: check length?
+      return new SyntaxGroup(
+        'NOUN', 1.0, 
+        prev.st, group.en, 
+        [prev, group], 
+        group);
+    }
+  });
+
+
 
   Syntax.prototype.done = function() {
 
