@@ -331,6 +331,18 @@
 
   Morph.Parsers = {}
 
+  Morph.plural = function(number) {
+    number = number % 100;
+    if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
+      return 'many';
+    } else
+    if (number % 10 == 1) {
+      return 'one';
+    } else {
+      return 'few';
+    }
+  }
+
   /**
    * Один из возможных вариантов морфологического разбора.
    *
@@ -391,15 +403,7 @@
     }
 
     if (typeof number == 'number') {
-      number = number % 100;
-      if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
-        number = 'many';
-      } else
-      if (number % 10 == 1) {
-        number = 'one';
-      } else {
-        number = 'few';
-      }
+      number = Morph.plural(number);
     }
 
     if (this.tag.NOUN && !this.tag.nomn && !this.tag.accs) {

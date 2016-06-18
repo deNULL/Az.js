@@ -9,6 +9,7 @@
   <script src="../src/az.dawg.js"></script>
   <script src="../src/az.morph.js"></script>
   <script src="../src/az.tokens.js"></script>
+  <script src="../src/az.syntax.js"></script>
   <style>
     .token {
       height: 18px;
@@ -105,6 +106,26 @@
       border-radius: 4px;
       border-bottom: none;
     }
+
+    #syntaxResults {
+      overflow: auto;
+    }
+    td {
+      font-size: 12px;
+      text-align: center;
+    }
+    td.word {
+      font-weight: bold;
+    }
+    td.group:before {
+      content: "";
+      display: block;
+      border: 1px solid #fff;
+      border-bottom-color: #444;
+      border-radius: 12px;
+      height: 16px;
+      margin-top: -20px;
+    }
   </style>
 </head>
 <body style="padding: 20px">
@@ -128,6 +149,12 @@
 
   <hr/>
 
+  <h3>Результат синтаксического разбора</h3>
+  <div id="syntaxResults">
+  </div>
+
+  <hr/>
+
   <div class="uk-form">
     <h3>Слово для морфологического разбора<br/><small>(можно кликать по кириллическим токенам сверху)</small></h3>
     <input id="word" type="text" style="width: 50%" placeholder="Слово для разбора" value="варкалось">
@@ -147,7 +174,64 @@
     Az.Morph.init('../dicts', function(err, Morph) {
       document.getElementById('word').addEventListener('keyup', updateMorph, false);
       updateMorph();
+
+      console.log(Az.Syntax('30 тысяч'));
+      updateSyntax();
     });
+
+    function updateSyntax() {
+      var analysis = Az.Syntax(document.getElementById('text').value);
+      var html = [];
+      var rows = [];
+      var total = 0;
+      for (var i = 0; i < analysis.tokens.length; i++) {
+        for (var j = 0; j < analysis.groups[i].length; j++) {
+          var group = analysis.groups[i][j];
+          if (group.en != i) {
+            continue;
+          }
+          total++;
+          var row = -1;
+          for (var k = 0; k < rows.length; k++) {
+            var last = rows[k][rows[k].length - 1];
+            if (last.en < group.st) {
+              row = k;
+              break;
+            }
+          }
+          if (row == -1) {
+            row = rows.push([]) - 1;
+          }
+          rows[row].push(group);
+        }
+      }
+      html.push('<table><tr>');
+      for (var i = 0; i < analysis.tokens.length; i++) {
+        var safe = analysis.tokens[i].toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
+        
+        html.push('<td class="word">' + safe + '</td>');
+      }
+      html.push('</tr>');
+      for (var i = 0; i < rows.length; i++) {
+        html.push('<tr>');
+        var last = 0;
+        for (var j = 0; j < rows[i].length; j++) {
+          var group = rows[i][j];
+          if (group.st > last) {
+            html.push('<td' + (group.st > last + 1 ? ' colspan=' + (group.st - last) : '') + '></td>');
+          }
+          html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' class="group"><span>' + group.type + '</span></td>');
+          last = group.en + 1;
+        }
+        if (last < analysis.tokens.length - 1) {
+          html.push('<td colspan=' + (analysis.tokens.length - last - 1) + '></td>');
+        }
+        html.push('</tr>');
+      }
+      html.push('</table>');
+      html.push('<p>Всего ' + total + ' гипотетических групп');
+      document.getElementById('syntaxResults').innerHTML = html.join('');
+    }
 
     function toggleMode(morph) {
       morphMode = morph;
@@ -250,6 +334,7 @@
       timeEn = (new Date()).getTime();
 
       toggleMode(morphMode);
+      updateSyntax();
     }
     document.getElementById('text').addEventListener('keyup', tokenize, false);
     tokenize();
