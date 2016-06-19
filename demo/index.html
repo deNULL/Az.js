@@ -175,7 +175,6 @@
       document.getElementById('word').addEventListener('keyup', updateMorph, false);
       updateMorph();
 
-      console.log(Az.Syntax('30 тысяч'));
       updateSyntax();
     });
 
@@ -213,14 +212,14 @@
       }
       html.push('</tr>');
       for (var i = 0; i < rows.length; i++) {
-        html.push('<tr>');
+        html.push('<tr valign=top>');
         var last = 0;
         for (var j = 0; j < rows[i].length; j++) {
           var group = rows[i][j];
           if (group.st > last) {
             html.push('<td' + (group.st > last + 1 ? ' colspan=' + (group.st - last) : '') + '></td>');
           }
-          html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' class="group"><span>' + group.type + '</span></td>');
+          html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' class="group"><span>' + group.type + '<br/><small>' + group.tag.toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
           last = group.en + 1;
         }
         if (last < analysis.tokens.length - 1) {
@@ -231,6 +230,7 @@
       html.push('</table>');
       html.push('<p>Всего ' + total + ' гипотетических групп');
       document.getElementById('syntaxResults').innerHTML = html.join('');
+      console.log(analysis);
     }
 
     function toggleMode(morph) {

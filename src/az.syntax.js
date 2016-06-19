@@ -33,6 +33,14 @@
     this.tag = tag || this.morph.tag;
   }
 
+  SyntaxGroup.prototype.merge = function(other, scoreMult, flatMerge, keepMain, type) {
+    return new SyntaxGroup(
+      type || (keepMain ? this : other).type, this.score * other.score * (scoreMult || 1.0), 
+      this.st, other.en, 
+      flatMerge ? this.childs.concat(other.childs) : [this, other], 
+      flatMerge ? (keepMain ? this : other) : (keepMain ? this.main : other.main));
+  }
+
   var _atom_id = 0;
   var AtomicSyntaxGroup = function(score, pos, token, morph, tag) {
     this.score = score;
@@ -90,7 +98,7 @@
 
       for (var j = 0; j < parses.length && (j < 2 || Math.abs(parses[0].score - parses[j].score) < 1e-6); j++) {
         var morph = parses[j];
-        var atom = new AtomicSyntaxGroup(1.0, i, token, morph);
+        var atom = new AtomicSyntaxGroup(morph.score, i, token, morph);
         var norm = morph.normalize().toString();
         var nbefore = ngroups.length;
 
@@ -112,19 +120,30 @@
           var groups = this.groups[group.st - 1];
           for (var k = 0; k < groups.length; k++) {
             var prev = groups[k];
+            if (!(prev.type in Syntax.Rules)) {
+              continue;
+            }
+            var rules;
+
+            // Rules by previous group type
+            rules = Syntax.Rules[prev.type];
             for (var u = 0; u < rules.length; u++) {
-              var merge = rules[u].merge(prev, group, this.groups);
+              var merge = rules[u](prev, group, this.groups);
+              if (merge) {
+                queue.push(merge);
+              }
+            }
+
+            // All non-specific rules
+            rules = Syntax.Rules['*'];
+            for (var u = 0; u < rules.length; u++) {
+              var merge = rules[u](prev, group, this.groups);
               if (merge) {
                 queue.push(merge);
               }
             }
           }
         }
-
-        // Fallback
-        /*if (nbefore == ngroups.length) {
-          ngroups.push(atom);
-        }*/
       }
 
       groups = ngroups;
@@ -133,108 +152,86 @@
 
   }
 
-  var rules = Syntax.Rules = [];
-
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'NUMB') {
-        return;
+  Syntax.Rules = {};
+  function addRule(types, rule) {
+    if (!rule) {
+      rule = types;
+      types = ['*'];
+    }
+    if (Object.prototype.toString.call(types) !== '[object Array]') {
+      types = [types];
+    }
+    for (var i = 0; i < types.length; i++){
+      var type = types[i];
+      if (!(type in Syntax.Rules)) {
+        Syntax.Rules[type] = [];
       }
+      Syntax.Rules[type].push(rule);
+    }
+  }
 
-      var pval = prev.morph.toString().split(/[.,]/)[0].substr(-4);
+  addRule('NUMB', function(prev, group) {
+    var pval = prev.morph.toString().split(/[.,]/)[0].substr(-4);
 
-      if (!prev.tag.real && pval.length < 4 && (group.tag.POST == 'NUMB')) {
-        var val = group.morph.toString().split(/[.,]/)[0];
-        // 12 300 можно склеить в одно число (=12300),
-        // 12 -300 нельзя
-        // 12.4 300 нельзя
-        // 12 3400 нельзя
-        // 1234 300 нельзя
-        if ((val.length == 3) && (val[0] != '−') && (val[0] != '-')) {
-          return new SyntaxGroup(
-            'NUMB', 1.0, 
-            prev.st, group.en, 
-            prev.childs.concat(group.childs), 
-            group.main);
-        }
+    if (!prev.tag.real && pval.length < 4 && (group.tag.POST == 'NUMB')) {
+      var val = group.morph.toString().split(/[.,]/)[0];
+      // 12 300 можно склеить в одно число (=12300),
+      // 12 -300 нельзя
+      // 12.4 300 нельзя
+      // 12 3400 нельзя
+      // 1234 300 нельзя
+      if ((val.length == 3) && (val[0] != '−') && (val[0] != '-')) {
+        return prev.merge(group, 1.0, true);
       }
     }
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'NUMB') {
-        return;
-      }
+  addRule('NUMB', function(prev, group) {
+    if (!(group instanceof AtomicSyntaxGroup)) {
+      return;
+    }
 
-      if (!(group instanceof AtomicSyntaxGroup)) {
-        return;
-      }
+    var norm = group.morph.normalize().toString();
+    var pval = prev.morph.toString().split(/[.,]/)[0].substr(-4);
+    var cat = Az.Morph.plural(parseInt(pval, 10));
 
-      var norm = group.morph.normalize().toString();
-      var pval = prev.morph.toString().split(/[.,]/)[0].substr(-4);
-      var cat = Az.Morph.plural(parseInt(pval, 10));
-
-      if ((['тысяча', 'миллион', 'миллиард'].indexOf(norm) > -1) &&
-          ((cat == 'one' && group.tag.sing) ||
-           (cat == 'few' && group.tag.plur) ||
-           (cat == 'many' && group.tag.plur && !group.tag.nomn && !group.tag.accs))) {
-        return new SyntaxGroup(
-          'NUMB', 1.0, 
-          prev.st, group.en, 
-          prev.childs.concat(group.childs), 
-          group.main);
-      }
+    if ((['тысяча', 'миллион', 'миллиард'].indexOf(norm) > -1) &&
+        ((cat == 'one' && group.tag.sing) ||
+         (cat == 'few' && group.tag.plur) ||
+         (cat == 'many' && group.tag.plur && !group.tag.nomn && !group.tag.accs))) {
+      return prev.merge(group, 1.0, true);
     }
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'ADJF' || group.type != 'NOUN') {
-        return;
-      }
-
-      if (!prev.tag.matches(group.tag, ['GNdr', 'NMbr', 'CAse'], true)) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        group);
+  addRule('ADJF', function(prev, group) {
+    if (group.type != 'NOUN') {
+      return;
     }
+
+    if (!prev.tag.matches(group.tag, ['GNdr', 'NMbr', 'CAse'], true)) {
+      return;
+    }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0);
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'NOUN' || group.type != 'NOUN' || !group.tag.gent) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        prev);
+  addRule('NOUN', function(prev, group) {
+    if (group.type != 'NOUN' || !group.tag.gent) {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, true);
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'NOUN' || group.type != 'VERB' || !prev.tag.nomn) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN-VERB', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        group);
+  addRule('NOUN', function(prev, group) {
+    if (group.type != 'VERB' || !prev.tag.nomn) {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, false, 'NOUN-VERB');
   });
 
   var preps = {
@@ -246,127 +243,95 @@
     'из': {gent: 1},
     'на': {accs: 1, loct: 1},
     'с': {gent: 1, ablt: 1},
-    'со': {gent: 1, ablt: 1}
+    'со': {gent: 1, ablt: 1},
+    'по': {datv: 1}
 
   };
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'PREP' || group.type != 'NOUN') {
-        return;
-      }
-
-      var pstr = prev.morph.toString();
-      if (!(pstr in preps)) {
-        console.log('not found: ' + pstr);
-        return;
-      }
-      
-      if (!(group.tag.CAse in preps[pstr])) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'PREP-NOUN', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        group);
+  addRule('PREP', function(prev, group) {
+    if (group.type != 'NOUN') {
+      return;
     }
+
+    var pstr = prev.morph.toString();
+    if (!(pstr in preps)) {
+      console.log('not found: ' + pstr);
+      return;
+    }
+
+    if (!(group.tag.CAse in preps[pstr])) {
+      return;
+    }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, false, 'PREP-NOUN');
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if ((prev.type != 'NOUN' && prev.type != 'NPRO') || group.type != 'PREP-NOUN') {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        prev);
+  addRule('NPRO', function(prev, group) {
+    if (group.type != 'PREP-NOUN') {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, true);
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'PREP-NOUN' || group.type != 'NOUN-VERB') {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN-VERB', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        group);
+  addRule('PREP-NOUN', function(prev, group) {
+    if (group.type != 'NOUN-VERB') {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0);
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'NOUN-VERB' || (group.type != 'NOUN' && group.type != 'NPRO') || !prev.tag.tran || !group.tag.accs) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN-VERB-NOUN', 1.0, 
-        prev.st, group.en, 
-        prev.childs.concat(group.childs), 
-        prev.main);
+  addRule('NOUN-VERB', function(prev, group) {
+    if (group.type != 'PREP-NOUN') {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, true);
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'NOUN-VERB' || (group.type != 'NOUN' && group.type != 'NPRO') || !group.tag.datv) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN-VERB', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        prev);
+  addRule('NOUN-VERB', function(prev, group) {
+    if ((group.type != 'NOUN' && group.type != 'NPRO') || !prev.tag.tran || !group.tag.accs) {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, true, true, 'NOUN-VERB-NOUN');
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'PRTF' || group.type != 'PREP-NOUN') {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'PRTF', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        prev);
+  addRule('NOUN-VERB', function(prev, group) {
+    if ((group.type != 'NOUN' && group.type != 'NPRO') || !group.tag.datv) {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, true);
   });
 
-  rules.push({
-    merge: function(prev, group) {
-      if (prev.type != 'PRTF' || group.type != 'NOUN') {
-        return;
-      }
-
-      if (!prev.tag.matches(group.tag, ['GNdr', 'NMbr', 'CAse'])) {
-        return;
-      }
-
-      // TODO: check length?
-      return new SyntaxGroup(
-        'NOUN', 1.0, 
-        prev.st, group.en, 
-        [prev, group], 
-        group);
+  addRule('PRTF', function(prev, group) {
+    if (group.type != 'PREP-NOUN') {
+      return;
     }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0, false, true);
+  });
+
+  addRule('PRTF', function(prev, group) {
+    if (prev.type != 'PRTF' || group.type != 'NOUN') {
+      return;
+    }
+
+    if (!prev.tag.matches(group.tag, ['GNdr', 'NMbr', 'CAse'])) {
+      return;
+    }
+
+    // TODO: check length?
+    return prev.merge(group, 1.0);
   });
 
   // «красивый дом»
@@ -375,27 +340,25 @@
     '»': '«',
     '"': '"'
   }
-  rules.push({
-    merge: function(prev, group, groups) {
-      if (group.type != 'PNCT' || prev.isQuote || prev.st == 0 || !(group.morph.toString() in quotes)) {
-        return;
-      }
-      var pair = quotes[group.morph.toString()];
-      var pprevs = groups[prev.st - 1];
-      if (!pprevs.length || !pprevs[0].type == 'PNCT' || pprevs[0].morph.toString() != pair) {
-        return;
-      }
-
-
-      // TODO: check length?
-      var group = new SyntaxGroup(
-        prev.type, 1.0, 
-        prev.st - 1, group.en, 
-        prev.childs.concat(group.childs), 
-        prev.main);
-      group.isQuote = true;
-      return group;
+  addRule(function(prev, group, groups) {
+    if (group.type != 'PNCT' || prev.isQuote || prev.st == 0 || !(group.morph.toString() in quotes)) {
+      return;
     }
+    var pair = quotes[group.morph.toString()];
+    var pprevs = groups[prev.st - 1];
+    if (!pprevs.length || !pprevs[0].type == 'PNCT' || pprevs[0].morph.toString() != pair) {
+      return;
+    }
+
+
+    // TODO: check length?
+    var group = new SyntaxGroup(
+      prev.type, 1.0, 
+      prev.st - 1, group.en, 
+      prev.childs.concat(group.childs), 
+      prev.main);
+    group.isQuote = true;
+    return group;
   });
 
   Syntax.prototype.done = function() {
