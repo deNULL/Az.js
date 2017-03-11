@@ -10,6 +10,7 @@
   <script src="../src/az.morph.js"></script>
   <script src="../src/az.tokens.js"></script>
   <script src="../src/az.syntax.js"></script>
+  <script src="../dicts/syntax.js"></script>
   <style>
     .token {
       height: 18px;
@@ -126,17 +127,22 @@
       height: 16px;
       margin-top: -20px;
     }
+    td.group {
+      cursor: pointer;
+    }
+    td.group.highlight {
+      color: #FF8686;
+    }
+    td.group.highlight:before {
+      border-bottom-color: #FF8686;
+    }
   </style>
 </head>
 <body style="padding: 20px">
   <div class="uk-grid uk-form">
     <div class="uk-width-large-1-2">
       <h3>Текст для токенизации</h3>
-      <textarea id="text" class="pure-input-1" style="height: 270px; width: 100%" placeholder="Текст для разбора">Текст (от лат. textus — «ткань; сплетение, связь, паутина, сочетание») — зафиксированная на каком-либо материальном носителе человеческая мысль; в общем плане связная и полная последовательность символов.
-
-Существуют две основные трактовки понятия «текст»: «имманентная» (расширенная, философски нагруженная) и «репрезентативная» (более частная). Имманентный подход подразумевает отношение к тексту как к автономной реальности, нацеленность на выявление его внутренней структуры. Репрезентативный — рассмотрение текста как особой формы представления знаний о внешней тексту действительности.
-
-В лингвистике термин текст используется в широком значении, включая и образцы устной речи. Восприятие текста изучается в рамках лингвистики текста и психолингвистики. Так, например, И. Р. Гальперин определяет текст следующим образом: «это письменное сообщение, объективированное в виде письменного документа, состоящее из ряда высказываний, объединённых разными типами лексической, грамматической и логической связи, имеющее определённый моральный характер, прагматическую установку и соответственно литературно обработанное»[1].</textarea>
+      <textarea id="text" class="pure-input-1" style="height: 270px; width: 100%" placeholder="Текст для разбора">Глокая куздра штеко бодланула бокра и кудрячит бокрёнка. Мама мыла раму.</textarea>
 
       <h3>Легенда</h3>
       <p class="uk-clearfix" style="margin-bottom: 20px" id="tokensLegend"></p>
@@ -167,6 +173,8 @@
 
   <script>
     var morphMode = false;
+    var analysis = false;
+    var groups = {};
     function showAll(variantId) {
       var el = document.getElementById('allForms' + variantId);
       el.style.display = (el.style.display == 'none') ? 'table-row' : 'none';
@@ -179,7 +187,7 @@
     });
 
     function updateSyntax() {
-      var analysis = Az.Syntax(document.getElementById('text').value);
+      analysis = Az.Syntax(document.getElementById('text').value);
       var html = [];
       var rows = [];
       var total = 0;
@@ -211,15 +219,19 @@
         html.push('<td class="word">' + safe + '</td>');
       }
       html.push('</tr>');
+      groups = {};
       for (var i = 0; i < rows.length; i++) {
         html.push('<tr valign=top>');
         var last = 0;
         for (var j = 0; j < rows[i].length; j++) {
           var group = rows[i][j];
+          groups[group.id] = group;
           if (group.st > last) {
             html.push('<td' + (group.st > last + 1 ? ' colspan=' + (group.st - last) : '') + '></td>');
           }
-          html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' class="group"><span>' + group.type + '<br/><small>' + group.tag.toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
+          html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' id="group' + group.id + '" class="group" onmouseover="highlightGroup(\'' + group.id + '\', true)" onmouseout="highlightGroup(\'' + group.id + '\', false)">' +
+            '<span>' + group.type + (group.score < 1.0 ? ' (' + group.score.toFixed(2) + ')' : '') + '<br/>' + 
+            '<small>' + group.tag.toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
           last = group.en + 1;
         }
         if (last < analysis.tokens.length - 1) {
@@ -231,6 +243,22 @@
       html.push('<p>Всего ' + total + ' гипотетических групп');
       document.getElementById('syntaxResults').innerHTML = html.join('');
       console.log(analysis);
+    }
+
+    function highlightGroup(id, on) {
+      var gr = document.getElementById('group' + id);
+      if (gr) {
+        gr.className = on ? 'group highlight' : 'group';
+      }
+
+      var group = groups[id];
+      if (group) {
+        for (var i = 0; i < group.childs.length; i++) {
+          if (group.childs[i] != group) {
+            highlightGroup(group.childs[i].id, on);
+          }
+        }
+      }
     }
 
     function toggleMode(morph) {

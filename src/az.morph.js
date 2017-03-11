@@ -151,7 +151,7 @@
       // Match to map
       for (var k in tag) {
         if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
-          if (!tag[k].indexOf(this[k])) {
+          if (tag[k].indexOf(this[k]) == -1) {
             return false;
           }
         } else {
@@ -715,7 +715,7 @@
           word = word.toLocaleUpperCase();
         }
         if (word.length && word.match(regexp)) {
-          return [new Parse(word, tag)];
+          return [new Parse(word, tag, score)];
         } else {
           return [];
         }
@@ -943,7 +943,7 @@
       word = word.toLocaleLowerCase();
       var parses = [];
       var minlen = 1;
-      var coeffs = [0, 0.2, 0.3, 0.4, 0.5, 0.6];
+      var coeffs = [0, 0.05, 0.15, 0.5, 0.55, 0.6];
       var used = {};
       for (var i = 0; i < prefixes.length; i++) {
         if (prefixes[i].length && (word.substr(0, prefixes[i].length) != prefixes[i])) {
