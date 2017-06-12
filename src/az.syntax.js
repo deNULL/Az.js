@@ -37,7 +37,7 @@
     var group = new SyntaxGroup(
       type || (leftSide ? this : other).type, Math.sqrt(this.score * other.score) * (scoreMult || 1.0),
       this.st, other.en,
-      extras && extras.childs ? extras.childs : 
+      extras && extras.childs ? extras.childs :
         (flatMerge ? this.childs.concat(other.childs) :
           (this.type[0] == '~' ? this.childs : [this]).concat(other.type[0] == '~' ? other.childs : [other])),
       flatMerge ? (leftSide ? this.main : other.main) :
@@ -280,6 +280,39 @@
         }
         rules[typeR].push(rule);
       }
+    }
+  }
+
+  // New stuff
+
+  var addRules = Syntax.addRules = function(callback) {
+    // Utilities
+    // it's easier to bind them to $ and _, for example
+    function Group() {
+      var list = Array.prototype.slice.call(arguments);
+      var tag = {};
+      if (typeof list[list.length - 1] != 'string') {
+        tag = list.pop();
+      }
+      return { group: list, tag: tag };
+    }
+    function Literal() {
+      var list = Array.prototype.slice.call(arguments);
+      var tag = {};
+      if (typeof list[list.length - 1] != 'string') {
+        tag = list.pop();
+      }
+      return { literal: list, tag: tag };
+    }
+    var rules = callback(Group, Literal);
+    console.log(rules.length + ' rules:', rules);
+    Syntax.Rules = rules;
+  }
+
+  Syntax.random = function(groupName) {
+    if (groupName.toUpperCase() == groupName) {
+      // A word from dictionary with given POS
+      
     }
   }
 

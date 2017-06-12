@@ -1,0 +1,248 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Az Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,700,400italic,300,600&subset=latin,cyrillic,cyrillic-ext,latin-ext" rel="stylesheet" type="text/css">
+  <link href="uikit.css" rel="stylesheet">
+  <script src="../src/az.js"></script>
+  <script src="../src/az.dawg.js"></script>
+  <script src="../src/az.morph.js"></script>
+  <script src="../src/az.tokens.js"></script>
+  <script src="../src/az.syntax.js"></script>
+  <script src="../dicts/syntax.js"></script>
+  <style>
+
+  </style>
+</head>
+<body style="padding: 20px">
+  <div class="uk-grid uk-form">
+    <div class="uk-width-large-1-2">
+      <h3>Фраза для разбора</h3>
+      <input id="phrase" type="text" style="width: 100%" placeholder="Фраза для разбора" value="">
+
+      <h3>Варианты структуры</h3>
+      <div id="options"></div>
+    </div>
+    <div class="uk-width-large-1-2">
+      <h3>Шаблоны</h3>
+      <div id="templates"></div>
+    </div>
+  </div>
+
+  <hr/>
+
+  <h3>Результат синтаксического разбора</h3>
+  <div id="syntaxResults">
+  </div>
+
+  <hr/>
+
+  <div class="uk-form">
+    <h3>Слово для морфологического разбора<br/><small>(можно кликать по кириллическим токенам сверху)</small></h3>
+    <input id="word" type="text" style="width: 50%" placeholder="Слово для разбора" value="варкалось">
+  </div>
+
+  <h3>Результаты разбора</h3>
+  <div class="uk-grid" id="morphResults">
+
+  </div>
+
+  <script>
+    var morphMode = false;
+    var analysis = false;
+    var groups = {};
+    function showAll(variantId) {
+      var el = document.getElementById('allForms' + variantId);
+      el.style.display = (el.style.display == 'none') ? 'table-row' : 'none';
+    }
+    Az.Morph.init('../dicts', function(err, Morph) {
+      document.getElementById('word').addEventListener('keyup', updateMorph, false);
+      updateMorph();
+
+      updateSyntax();
+    });
+
+    function updateSyntax() {
+      analysis = Az.Syntax(document.getElementById('text').value);
+      var html = [];
+      var rows = [];
+      var total = 0;
+      for (var i = 0; i < analysis.tokens.length; i++) {
+        for (var j = 0; j < analysis.groups[i].length; j++) {
+          var group = analysis.groups[i][j];
+          if (group.en != i) {
+            continue;
+          }
+          total++;
+          var row = -1;
+          for (var k = 0; k < rows.length; k++) {
+            var last = rows[k][rows[k].length - 1];
+            if (last.en < group.st) {
+              row = k;
+              break;
+            }
+          }
+          if (row == -1) {
+            row = rows.push([]) - 1;
+          }
+          rows[row].push(group);
+        }
+      }
+      html.push('<table><tr>');
+      for (var i = 0; i < analysis.tokens.length; i++) {
+        var safe = analysis.tokens[i].toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
+
+        html.push('<td class="word">' + safe + '</td>');
+      }
+      html.push('</tr>');
+      groups = {};
+      for (var i = 0; i < rows.length; i++) {
+        html.push('<tr valign=top>');
+        var last = 0;
+        for (var j = 0; j < rows[i].length; j++) {
+          var group = rows[i][j];
+          groups[group.id] = group;
+          if (group.st > last) {
+            html.push('<td' + (group.st > last + 1 ? ' colspan=' + (group.st - last) : '') + '></td>');
+          }
+          html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' id="group' + group.id + '" class="group" onmouseover="highlightGroup(\'' + group.id + '\', true)" onmouseout="highlightGroup(\'' + group.id + '\', false)">' +
+            '<span>' + group.type + (group.score < 1.0 ? ' (' + group.score.toFixed(2) + ')' : '') + '<br/>' +
+            '<small>' + group.tag.toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
+          last = group.en + 1;
+        }
+        if (last < analysis.tokens.length - 1) {
+          html.push('<td colspan=' + (analysis.tokens.length - last - 1) + '></td>');
+        }
+        html.push('</tr>');
+      }
+      html.push('</table>');
+      html.push('<p>Всего ' + total + ' гипотетических групп');
+      document.getElementById('syntaxResults').innerHTML = html.join('');
+      console.log(analysis);
+    }
+
+    function highlightGroup(id, on) {
+      var gr = document.getElementById('group' + id);
+      if (gr) {
+        gr.className = on ? 'group highlight' : 'group';
+      }
+
+      var group = groups[id];
+      if (group) {
+        for (var i = 0; i < group.childs.length; i++) {
+          if (group.childs[i] != group) {
+            highlightGroup(group.childs[i].id, on);
+          }
+        }
+      }
+    }
+
+    function toggleMode(morph) {
+      morphMode = morph;
+      document.getElementById('resultsHeader').innerHTML =
+        morph ?
+          '<span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(false);">Результат токенизации</span> | Результат морфологического разбора' :
+          'Результат токенизации | <span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(true);">Результат морфологического разбора</span>';
+      update();
+    }
+
+    function updateMorph() {
+      var variants = Az.Morph(document.getElementById('word').value, { typos: 'auto' });
+      var html = [];
+      for (var i = 0; i < variants.length; i++) {
+        html.push('<div class="uk-width-medium-1-3 parse" style="margin-bottom: 20px"><div><table class="uk-table uk-table-striped uk-table-condensed" style="font-size: 13px">' +
+          '<tr><th colspan="2">' + variants[i] + '</th></tr>' +
+          '<tr><td width="40%">Score</td><td><b>' + variants[i].score.toFixed(6) + '</b></td></tr>' +
+          '<tr><td width="40%">Парсер</td><td><b>' + variants[i].parser + '</b></td></tr>' +
+          '<tr><td width="40%">Граммемы<br/><small>по-русски</small></td><td>' + variants[i].tag.ext + '</td></tr>' +
+          '<tr><td width="40%">Граммемы<br/><small>внутренний формат</small></td><td>' + variants[i].tag + '</td></tr>' +
+          '<tr><td width="40%">Начальная форма</td><td>' + variants[i].normalize() + '</td></tr>' +
+          '<tr><td width="40%">Начальная форма<br/><small>(та же часть речи)</small></td><td>' + variants[i].normalize(true) + '</td></tr>' +
+          '<tr><td width="40%">Устранено повторов букв</td><td>' + (variants[i].stutterCnt || 0) + '</td></tr>' +
+          '<tr><td width="40%">Устранено опечаток</td><td>' + (variants[i].typosCnt || 0) + '</td></tr>');
+        if (variants[i].formCnt) {
+          html.push(
+            '<tr><td colspan="2"><a href="#" onclick="showAll(' + i + '); return false;">Показать всю парадигму (' + variants[i].formCnt + ' ' + Az.Morph('форма')[0].pluralize(variants[i].formCnt) + ')</a></td></tr>' +
+            '<tr id="allForms' + i + '" style="display: none"><td colspan="2" style="padding: 0"><table class="uk-table uk-table-condensed" style="font-size: 13px; margin-bottom: 0px">');
+          for (var formIdx = 0; formIdx < variants[i].formCnt; formIdx++) {
+            var form = variants[i].inflect(formIdx);
+            html.push('<tr><td width="40%"><strong>' + form + '</strong></td><td>' + form.tag.ext + '</td></tr>');
+          }
+          html.push('</table></td></tr>');
+        }
+        html.push('</table></div></div>');
+      }
+      if (!html.length) {
+        html.push('<div class="uk-width-1"><i>Нет вариантов</i></div>');
+      }
+      document.getElementById('morphResults').innerHTML = html.join('');
+    }
+
+
+    var types = ['SPACE', 'WORD', 'NUMBER', 'PUNCT', 'LINK', 'EMAIL', 'HASHTAG', 'MARKUP', 'TAG', 'CONTENT', 'OTHER'].map(function(type) {
+      return Az.Tokens[type];
+    });
+    var html, tokens = [], timeSt, timeEn;
+    function update() {
+      var incl = [];
+      for (var i = 0; i < types.length; i++) {
+        if (!document.getElementById('filter-' + types[i]) || document.getElementById('filter-' + types[i]).checked) {
+          incl.push(types[i]);
+        }
+      }
+      if (incl.indexOf(Az.Tokens.CYRIL) > -1 || incl.indexOf(Az.Tokens.LATIN) > -1) {
+        incl.push(Az.Tokens.WORD);
+      }
+      var filtered = tokens.done(incl, false);
+
+      if (morphMode) {
+        html = ['NOUN', 'NPRO', 'NUMR', 'ADJF', 'ADJS', 'COMP', 'VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'ADVB', 'PRED', 'PREP', 'CONJ', 'PRCL', 'INTJ', 'LATN'].map(function(type) {
+          return '<span style="white-space: nowrap; float: left;"><span class="token morph-' + type + '" style="cursor: default">' + type + '</span></span>';
+        });
+        document.getElementById('tokensLegend').innerHTML = html.join('');
+        html = filtered.map(function(token, i) {
+          var safe = token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
+          if (token.type === Az.Tokens.WORD) {
+            var parses = Az.Morph(token.toString());
+            return '<span class="token' + (parses.length ? ' morph-' + parses[0].tag.POST + '" title="' + parses[0].tag.toString() : '') + '" onclick="morph(\'' + token.toString().split('\'').join('\\\'') + '\');" style="cursor: pointer">' + safe + '</span>';
+          }
+          return '<span class="token token-SPACE" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + safe + '</span>';
+        });
+      } else {
+        html = types.map(function(type) {
+          return '<span style="white-space: nowrap; float: left;"><input id="filter-' + type + '" type="checkbox" checked onchange="update()" style="margin-left: 10px"/><span class="token token-' + type + '" style="cursor: default">' + type + '</span></span>';
+        });
+        document.getElementById('tokensLegend').innerHTML = html.join('');
+        html = filtered.map(function(token, i) {
+          var safe = token.toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
+          if ((token.type === Az.Tokens.WORD) && (token.subType === Az.Tokens.CYRIL)) {
+            return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '" onclick="morph(\'' + token.toString().split('\'').join('\\\'') + '\');" style="cursor: pointer">' + safe + '</span>';
+          }
+          return '<span class="token token-' + token.type + (token.subType ? ' token-' + token.subType : '') + '" title="' + token.type + (token.subType ? ', ' + token.subType : '') + '">' + safe + '</span>';
+        });
+      }
+
+      document.getElementById('tokensResults').innerHTML = html.join('') + '<p>Токенизация выполнена за ' + (timeEn - timeSt) + 'мс, всего ' + tokens.tokens.length + ' токенов</p>';
+    }
+    function morph(s) {
+      document.getElementById('word').value = s;
+      updateMorph();
+    }
+    function tokenize() {
+      timeSt = (new Date()).getTime();
+      tokens = Az.Tokens(document.getElementById('text').value, {
+        html: true,
+        wiki: true,
+        markdown: true
+      });
+      timeEn = (new Date()).getTime();
+
+      toggleMode(morphMode);
+      updateSyntax();
+    }
+    document.getElementById('text').addEventListener('keyup', tokenize, false);
+    tokenize();
+  </script>
+</body>
+</html>

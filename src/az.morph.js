@@ -139,6 +139,10 @@
    */
   // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
   Tag.prototype.matches = function(tag, grammemes, ignoreMissing) {
+    if (ignoreMissing === undefined && typeof grammemes == 'boolean') {
+      ignoreMissing = grammemes;
+      grammemes = false;
+    }
     if (!grammemes) {
       if (Object.prototype.toString.call(tag) === '[object Array]') {
         for (var i = 0; i < tag.length; i++) {
@@ -155,7 +159,7 @@
             return false;
           }
         } else {
-          if (tag[k] != this[k]) {
+          if (tag[k] != this[k] && (tag[k] !== false || this[k] !== undefined)) {
             return false;
           }
         }
@@ -1141,7 +1145,7 @@
         callback(err);
         return;
       }
-      
+
       var list = new Uint16Array(data),
           count = list[0],
           pos = 1;
@@ -1154,6 +1158,65 @@
       }
       loaded();
     });
+  }
+
+  Morph.findAllMatching = function(singleForm, tag, grammemes, ignoreMissing) {
+    var pairs = [];
+    // Iterate over all paradigms and forms
+
+    for (var i = 0; i < paradigms.length; i++) {
+      var cnt = paradigms[i].length / 3;
+      for (var j = 0; j < cnt; j++) {
+        if (tags[paradigms[i][cnt + j]].matches(tag, grammemes, ignoreMissing)) {
+          pairs.push([i, j]);
+          if (singleForm) {
+            break;
+          }
+        }
+      }
+    }
+
+    if (!pairs.length) {
+      // No matching paradigms/forms
+      return [];
+    }
+
+    var opts = words.findAllMatching(pairs);
+    var vars = [];
+    for (var i = 0; i < opts.length; i++) {
+      for (var j = 0; j < opts[i][1].length; j++) {
+        var w = new DictionaryParse(
+          opts[i][0],
+          opts[i][1][j][0],
+          opts[i][1][j][1]);
+        vars.push(w);
+      }
+    }
+    return vars;
+  }
+
+  Morph.stats = function(singleForm, tag, grammemes, ignoreMissing) {
+    var pairs = [];
+    // Iterate over all paradigms and forms
+
+    for (var i = 0; i < paradigms.length; i++) {
+      var cnt = paradigms[i].length / 3;
+      for (var j = 0; j < cnt; j++) {
+        if (tags[paradigms[i][cnt + j]].matches(tag, grammemes, ignoreMissing)) {
+          pairs.push([i, j]);
+          if (singleForm) {
+            break;
+          }
+        }
+      }
+    }
+
+    if (!pairs.length) {
+      // No matching paradigms/forms
+      return [];
+    }
+
+    return words.stats(pairs);
   }
 
   return Morph;
