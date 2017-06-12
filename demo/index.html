@@ -215,7 +215,7 @@
       html.push('<table><tr>');
       for (var i = 0; i < analysis.tokens.length; i++) {
         var safe = analysis.tokens[i].toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
-        
+
         html.push('<td class="word">' + safe + '</td>');
       }
       html.push('</tr>');
@@ -230,8 +230,8 @@
             html.push('<td' + (group.st > last + 1 ? ' colspan=' + (group.st - last) : '') + '></td>');
           }
           html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' id="group' + group.id + '" class="group" onmouseover="highlightGroup(\'' + group.id + '\', true)" onmouseout="highlightGroup(\'' + group.id + '\', false)">' +
-            '<span>' + group.type + (group.score < 1.0 ? ' (' + group.score.toFixed(2) + ')' : '') + '<br/>' + 
-            '<small>' + group.tag.toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
+            '<span>' + group.type + (group.score < 1.0 ? ' (' + group.score.toFixed(2) + ')' : '') + '<br/>' +
+            '<small>' + (group.tag || ',—').toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
           last = group.en + 1;
         }
         if (last < analysis.tokens.length - 1) {
@@ -263,7 +263,7 @@
 
     function toggleMode(morph) {
       morphMode = morph;
-      document.getElementById('resultsHeader').innerHTML = 
+      document.getElementById('resultsHeader').innerHTML =
         morph ?
           '<span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(false);">Результат токенизации</span> | Результат морфологического разбора' :
           'Результат токенизации | <span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(true);">Результат морфологического разбора</span>';

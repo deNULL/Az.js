@@ -231,7 +231,7 @@
     }
     function tokenize() {
       timeSt = (new Date()).getTime();
-      tokens = Az.Tokens(document.getElementById('text').value, {
+      tokens = Az.Tokens(document.getElementById('phrase').value, {
         html: true,
         wiki: true,
         markdown: true
@@ -241,7 +241,7 @@
       toggleMode(morphMode);
       updateSyntax();
     }
-    document.getElementById('text').addEventListener('keyup', tokenize, false);
+    document.getElementById('phrase').addEventListener('keyup', tokenize, false);
     tokenize();
   </script>
 </body>

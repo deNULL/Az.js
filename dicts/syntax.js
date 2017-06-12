@@ -276,7 +276,7 @@ Y придаточное-подлежащее, вводимое вопросит
   {
     template: [
       $('NOUN', 'NPRO', 'DefNoun', { CAse: 'nomn' }),
-      $('ADVB'),
+      $('ADVB', { Dmns: true }),
     ],
     produces: {
       type: 'Predicate',
@@ -305,7 +305,7 @@ Y придаточное-подлежащее, вводимое вопросит
   {
     template: [
       $('NOUN', 'NPRO', 'DefNoun', { CAse: 'datv' }),
-      _('стало', { POS: 'VERB', GNdr: 'neut', NMbr: 'sing', TEns: 'past', MOod: 'indc' })
+      _('стало', { POS: 'VERB', GNdr: 'neut', NMbr: 'sing', TEns: 'past', MOod: 'indc' }),
       $('ADVB', { Prdx: true }),
     ],
     produces: {
@@ -316,7 +316,7 @@ Y придаточное-подлежащее, вводимое вопросит
   {
     template: [
       $('NOUN', 'NPRO', 'DefNoun', { CAse: 'datv' }),
-      _('станет', { POS: 'VERB', PErs: '3per', NMbr: 'sing', TEns: 'futr', MOod: 'indc' })
+      _('станет', { POS: 'VERB', PErs: '3per', NMbr: 'sing', TEns: 'futr', MOod: 'indc' }),
       $('ADVB', { Prdx: true }),
     ],
     produces: {
@@ -327,7 +327,7 @@ Y придаточное-подлежащее, вводимое вопросит
   {
     template: [
       $('NOUN', 'NPRO', 'DefNoun', { CAse: 'datv' }),
-      _('было', { POS: 'VERB', GNdr: 'neut', NMbr: 'sing', TEns: 'past', MOod: 'indc' })
+      _('было', { POS: 'VERB', GNdr: 'neut', NMbr: 'sing', TEns: 'past', MOod: 'indc' }),
       $('ADVB', { Prdx: true }),
     ],
     produces: {
@@ -338,7 +338,7 @@ Y придаточное-подлежащее, вводимое вопросит
   {
     template: [
       $('NOUN', 'NPRO', 'DefNoun', { CAse: 'datv' }),
-      _('будет', { POS: 'VERB', PErs: '3per', NMbr: 'sing', TEns: 'futr', MOod: 'indc' })
+      _('будет', { POS: 'VERB', PErs: '3per', NMbr: 'sing', TEns: 'futr', MOod: 'indc' }),
       $('ADVB', { Prdx: true }),
     ],
     produces: {

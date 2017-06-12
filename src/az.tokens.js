@@ -53,7 +53,7 @@
     return (('_str' in this) && (this._str.length == this.length)) ? this._str : (this._str = this.source.substr(this.st, this.length));
   }
   Token.prototype.indexOf = function(str) {
-    if (str.length == 1) {
+    if ((str.length == 1) && !('_str' in this)) {
       for (var i = 0; i < this.length; i++) {
         if (this.source[this.st + i] == str) {
           return i;
@@ -173,7 +173,7 @@
 
     var offs = this.source.length;
     this.source += text;
-    
+
     var s = this.source, ts = this.tokens;
     for (var i = offs; i < s.length; i++) {
       var ch = s[i];
@@ -186,9 +186,9 @@
 
       if (config.html && (ch == ';')) {
         // &nbsp;
-        if ((last > 0) && 
-            (token.type === Tokens.WORD) && 
-            (ts[last - 1].length == 1) && 
+        if ((last > 0) &&
+            (token.type === Tokens.WORD) &&
+            (ts[last - 1].length == 1) &&
             (s[ts[last - 1].st] == '&')) {
           var name = token.toLowerCase();
           if (name in HTML_ENTITIES) {
@@ -202,12 +202,12 @@
         } else
         // &x123AF5;
         // &1234;
-        if ((last > 1) && 
-            ((token.type === Tokens.NUMBER) || 
+        if ((last > 1) &&
+            ((token.type === Tokens.NUMBER) ||
              ((token.type === Tokens.WORD) &&
-              (s[token.st] == 'x'))) && 
+              (s[token.st] == 'x'))) &&
             (ts[last - 1].length == 1) &&
-            (s[ts[last - 1].st] == '#') && 
+            (s[ts[last - 1].st] == '#') &&
             (ts[last - 1].length == 1) &&
             (s[ts[last - 1].st] == '&')) {
           if (s[token.st] == 'x') {
@@ -268,8 +268,8 @@
       }
 
       if (token) {
-        if (config.wiki && 
-            (ch != "'") && 
+        if (config.wiki &&
+            (ch != "'") &&
             (token.length == 1) &&
             (s[token.st] == "'") &&
             (last > 0) &&
@@ -283,9 +283,9 @@
         }
 
         // Preprocess last token
-        if (config.links && 
+        if (config.links &&
             config.links.tlds &&
-            ((charType === Tokens.PUNCT) || 
+            ((charType === Tokens.PUNCT) ||
              (charType === Tokens.SPACE)) &&
             (ts.length > 2) &&
             (ts[last - 2].type === Tokens.WORD) &&
@@ -298,8 +298,8 @@
           while ((last >= 2) &&
                  (ts[last - 2].type === Tokens.WORD) &&
                  (ts[last - 1].length == 1) &&
-                 ((s[ts[last - 1].st] == '.') || 
-                  (s[ts[last - 1].st] == '@') || 
+                 ((s[ts[last - 1].st] == '.') ||
+                  (s[ts[last - 1].st] == '@') ||
                   (s[ts[last - 1].st] == ':'))) {
             last -= 2;
             token = ts[last];
@@ -307,8 +307,8 @@
             token.allUpper = token.allUpper && ts[last + 1].allUpper && ts[last + 2].allUpper;
           }
 
-          if (config.emails && 
-              (token.indexOf('@') > -1) && 
+          if (config.emails &&
+              (token.indexOf('@') > -1) &&
               (token.indexOf(':') == -1)) {
             // URL can contain a '@' but in that case it should be in form http://user@site.com or user:pass@site.com
             // So if URL has a '@' but no ':' in it, we assume it's a email
@@ -325,8 +325,8 @@
 
         // Process next char (start new token or append to the previous one)
         if (token.type === Tokens.LINK) {
-          if ((ch == ')') && 
-              (last >= 1) && 
+          if ((ch == ')') &&
+              (last >= 1) &&
               (ts[last - 1].type === Tokens.MARKUP) &&
               (ts[last - 1].length == 1) &&
               (s[ts[last - 1].st] == '(')) {
@@ -342,9 +342,9 @@
           }
         } else
         if ((token.type === Tokens.HASHTAG) || (token.type === Tokens.MENTION)) {
-          if ((charType === Tokens.CYRIL) || 
-              (charType == Tokens.LATIN) || 
-              (charType == Tokens.DIGIT) || 
+          if ((charType === Tokens.CYRIL) ||
+              (charType == Tokens.LATIN) ||
+              (charType == Tokens.DIGIT) ||
               (ch == '_') || ((ch == '@') && (token.indexOf('@') == -1))) {
             append = true;
           }
@@ -378,7 +378,7 @@
               append = false;
               tokenType = Tokens.TAG;
               tokenSubType = Tokens.CLOSING;
-            } else 
+            } else
             if ((token.length >= 7) && (token.toString().substr(-7) == '</style')) {
               token.length -= 7;
               st -= 7;
@@ -386,26 +386,26 @@
               append = false;
               tokenType = Tokens.TAG;
               tokenSubType = Tokens.CLOSING;
-            } 
+            }
           }
         } else
-        if ((token.type === Tokens.TAG) && 
+        if ((token.type === Tokens.TAG) &&
             (token.type !== Tokens.CLOSING) &&
             (token.length >= 8) &&
             (token.toLowerCase().substr(1, 6) == 'script')) {
           tokenType = Tokens.CONTENT;
           tokenSubType = Tokens.SCRIPT;
         } else
-        if ((token.type === Tokens.TAG) && 
+        if ((token.type === Tokens.TAG) &&
             (token.type !== Tokens.CLOSING) &&
-            (token.length >= 7) && 
+            (token.length >= 7) &&
             (token.toLowerCase().substr(1, 5) == 'style')) {
           tokenType = Tokens.CONTENT;
           tokenSubType = Tokens.STYLE;
         } else
-        if (config.html && 
+        if (config.html &&
             (token.length == 1) &&
-            (s[token.st] == '<') && 
+            (s[token.st] == '<') &&
             ((charType === Tokens.LATIN) || (ch == '!') || (ch == '/'))) {
           append = true;
           token.type = Tokens.TAG;
@@ -419,19 +419,19 @@
         if (token.type === Tokens.CONTENT) {
           append = true;
         } else
-        if ((token.type === Tokens.MARKUP) && 
-            (token.subType == Tokens.TEMPLATE) && 
-            ((s[token.en()] != '}') || 
+        if ((token.type === Tokens.MARKUP) &&
+            (token.subType == Tokens.TEMPLATE) &&
+            ((s[token.en()] != '}') ||
              (s[token.en() - 1] != '}'))) {
           append = true;
         } else
-        if ((token.type === Tokens.MARKUP) && 
-            (token.type === Tokens.LINK) && 
+        if ((token.type === Tokens.MARKUP) &&
+            (token.type === Tokens.LINK) &&
             (s[token.en()] != ')')) {
           append = true;
         } else
-        if ((token.type === Tokens.MARKUP) && 
-            (s[token.st] == '`') && 
+        if ((token.type === Tokens.MARKUP) &&
+            (s[token.st] == '`') &&
             (token.subType === Tokens.NEWLINE) &&
             (charType === Tokens.LATIN)) {
           append = true;
@@ -449,15 +449,15 @@
             append = true;
             token.type = Tokens.HASHTAG;
           } else
-          if (config.mentions && 
-              (token.length == 1) && 
-              (s[token.st] == '@') && 
+          if (config.mentions &&
+              (token.length == 1) &&
+              (s[token.st] == '@') &&
               ((last == 0) || (ts[last - 1].type === Tokens.SPACE))) { // Mentions
             append = true;
             token.type = Tokens.MENTION;
           } else
-          if ((charType === Tokens.LATIN) && 
-              (token.length == 1) && 
+          if ((charType === Tokens.LATIN) &&
+              (token.length == 1) &&
               ((s[token.st] == "'") || (s[token.st] == '’'))) {
             append = true;
             token.type = Tokens.WORD;
@@ -500,8 +500,8 @@
             token.type = Tokens.NUMBER;
           } else
           if ((token.length == 1) &&
-              ((s[token.st] == ',') || (s[token.st] == '.')) && 
-              (ts.length > 1) && 
+              ((s[token.st] == ',') || (s[token.st] == '.')) &&
+              (ts.length > 1) &&
               (ts[last - 1].type === Tokens.NUMBER)) {
             append = true;
 
@@ -516,14 +516,14 @@
             append = true;
           }
         } else
-        if ((token.type === Tokens.MARKUP) && 
+        if ((token.type === Tokens.MARKUP) &&
             (s[token.st] == ch) &&
             ('=-~:*#`\'>_'.indexOf(ch) > -1)) {
           append = true;
         } else
         if (ch == '.') {
-          if (config.links && 
-              config.links.www && 
+          if (config.links &&
+              config.links.www &&
               (token.length == 3) &&
               (token.toLowerCase() == 'www')) { // Links without protocol but with www
             append = true;
@@ -540,15 +540,15 @@
             token.type = Tokens.MARKUP;
           }
         } else
-        if ((ch == '-') || 
-            ((token.subType == Tokens.LATIN) && 
+        if ((ch == '-') ||
+            ((token.subType == Tokens.LATIN) &&
              ((ch == '’') || (ch == "'")))) {
           if (token.type === Tokens.WORD) {
             append = true;
           }
         } else
         if (ch == '/') {
-          if (config.links && 
+          if (config.links &&
               config.links.protocols &&
               (ts.length > 2) &&
               (ts[last - 2].type === Tokens.WORD) &&
@@ -568,8 +568,8 @@
           }
         } else
         if (config.html && ch == ';') {
-          if ((last > 0) && 
-              (token.type === Tokens.WORD) && 
+          if ((last > 0) &&
+              (token.type === Tokens.WORD) &&
               (ts[last - 1].length == 1) &&
               (s[ts[last - 1].st] == '&')) {
             append = true;
@@ -581,11 +581,11 @@
 
             ts.length -= 1;
           } else
-          if ((last > 1) && 
-              ((token.type === Tokens.WORD) || 
-               (token.type === Tokens.NUMBER)) && 
+          if ((last > 1) &&
+              ((token.type === Tokens.WORD) ||
+               (token.type === Tokens.NUMBER)) &&
               (ts[last - 1].length == 1) &&
-              (s[ts[last - 1].st] == '#') && 
+              (s[ts[last - 1].st] == '#') &&
               (ts[last - 2].length == 1) &&
               (s[ts[last - 2].st] == '&')) {
             append = true;
@@ -598,21 +598,21 @@
             ts.length -= 2;
           }
         } else
-        if (config.markdown && 
-            (ch == '[') && 
+        if (config.markdown &&
+            (ch == '[') &&
             (token.length == 1) &&
             (s[token.st] == '!')) {
           append = true;
           token.type = Tokens.MARKUP;
         } else
-        if (config.markdown && 
+        if (config.markdown &&
             (ch == '(') &&
             (token.length == 1) &&
             (s[token.st] == ']')) {
           tokenType = Tokens.MARKUP;
           tokenSubType = Tokens.LINK;
         } else
-        if (config.wiki && 
+        if (config.wiki &&
             (ch == '{') &&
             (token.length == 1) &&
             (s[token.st] == '{')) {
@@ -620,14 +620,14 @@
           token.type = Tokens.MARKUP;
           token.subType = Tokens.TEMPLATE;
         } else
-        if (config.wiki && 
-            (ch == '[') && 
+        if (config.wiki &&
+            (ch == '[') &&
             (token.length == 1) &&
             (s[token.st] == '[')) {
           append = true;
         } else
-        if (config.wiki && 
-            (ch == ']') && 
+        if (config.wiki &&
+            (ch == ']') &&
             (token.length == 1) &&
             (s[token.st] == ']')) {
           append = true;
@@ -635,14 +635,14 @@
         if (config.wiki && (ch == '|') && !lineStart) {
           var found = -1;
           for (var j = last - 1; j >= 0; j--) {
-            if ((ts[j].length == 2) && 
-                (s[ts[j].st] == '[') && 
+            if ((ts[j].length == 2) &&
+                (s[ts[j].st] == '[') &&
                 (s[ts[j].st + 1] == '[')) {
               found = j;
               break;
             }
-            if (((ts[j].length == 1) && 
-                 (s[ts[j].st] == '|')) || 
+            if (((ts[j].length == 1) &&
+                 (s[ts[j].st] == '|')) ||
                 ts[j].indexOf('\n') > -1) {
               break;
             }
@@ -760,7 +760,7 @@
     }
     return list;
   }
-  
+
   /**
    * Возвращает токен по его индексу.
    *

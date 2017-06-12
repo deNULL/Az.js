@@ -167,7 +167,7 @@
       return true;
     }
 
-    if (tag instanceof Parse) {
+    if (!(tag instanceof Tag) && ('tag' in tag)) {
       tag = tag.tag;
     }
 
@@ -391,6 +391,8 @@
    * @see Tag.matches
    */
   Parse.prototype.inflect = function(tag, grammemes) {
+    // Subclasses which allow inflections should implement this method.
+    // If it's impossible to inflect word, we can just return it unchanged.
     return this;
   }
 
