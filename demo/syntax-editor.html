@@ -1,0 +1,154 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Az Syntax Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,700,400italic,300,600&subset=latin,cyrillic,cyrillic-ext,latin-ext" rel="stylesheet" type="text/css">
+  <link href="uikit.css" rel="stylesheet">
+  <script src="../src/az.js"></script>
+  <script src="../src/az.dawg.js"></script>
+  <script src="../src/az.morph.js"></script>
+  <script src="../src/az.tokens.js"></script>
+  <script src="../src/az.syntax.js"></script>
+  <style>
+#el-morph {
+  display: flex;
+}
+.token-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.token {
+  font-size: 20px;
+  padding: 4px 3px;
+}
+.parse {
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  padding: 1px 2px;
+}
+  </style>
+</head>
+<body style="padding: 20px">
+  <div class="uk-grid uk-form">
+    <div class="uk-width-large-1-2">
+      <h3>Синтаксичеcкие отношения</h3>
+      <div class="uk-scrollable-box">
+        <ul class="uk-nav uk-nav-side" id="el-relations">
+            <li><a href="#">...</a></li>
+            <li class="uk-active"><a href="#">...</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="uk-width-large-1-2">
+      <h3>Тексты</h3>
+      <div class="uk-scrollable-box">
+        <ul class="uk-nav uk-nav-side" id="el-texts">
+            <li><a href="#">...</a></li>
+            <li class="uk-active"><a href="#">...</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="uk-width-1">
+      <h3 style="margin-top: 15px">Текст</h3>
+      <input type="text" id="inp-text" class="uk-width-1-1" onkeyup="onTextChange()" onchange="onTextChange()" onpaste="onTextChange()"/>
+      <h3>Морфология</h3>
+      <div id="el-morph"></div>
+      <h3>Синтаксис</h3>
+      <div id="el-syntax"></div>
+      <a href onclick="addSyntaxGroup(); return false">+ добавить синтаксическую группу</a>
+    </div>
+  </div>
+
+
+<script>
+var relations = [];
+var texts = [];
+var draft;
+Az.Morph.init('../dicts', function(err, Morph) {
+
+});
+
+function loadData() {
+  if ('azRelations' in localStorage) {
+    relations = JSON.parse(localStorage['azRelations']);
+  }
+  if ('azTexts' in localStorage) {
+    texts = JSON.parse(localStorage['azTexts']);
+  }
+}
+function updateRelations() {
+
+}
+function selectText(index, data) {
+  draft = data;
+  document.getElementById('inp-text').value = data.text;
+  onTextChange();
+}
+function onTextChange() {
+  var text = document.getElementById('inp-text').value;
+
+  var tokens = Az.Tokens(text).done();
+  var elMorph = document.getElementById('el-morph');
+  elMorph.innerHTML = '';
+  for (var i = 0; i < tokens.length; i++) {
+    var el = document.createElement('div');
+    el.className = 'token-wrap';
+    var parses = Az.Morph(tokens[i].toString(), { typos: 'auto' });
+    var elToken = document.createElement('div');
+    elToken.className = 'token';
+    elToken.innerText = tokens[i].toString();
+    el.appendChild(elToken);
+
+    for (var j = 0; j < parses.length; j++) {
+      var elParse = document.createElement('div');
+      elParse.className = 'parse';
+      elParse.innerText = parses[j].tag.ext.toString();
+      el.appendChild(elParse);
+    }
+
+    elMorph.appendChild(el);
+  }
+}
+function updateTexts() {
+  function select(index) {
+    for (var i = 0; i < els.length; i++) {
+      els[i].className = (this == els[i]) ? 'uk-active' : '';
+    }
+    if (index > -1) {
+      selectText(index, texts[index]);
+    } else {
+      selectText(index, {
+        text: ''
+      });
+    }
+  }
+  var elTexts = document.getElementById('el-texts');
+  elTexts.innerHTML = '';
+  var els = [];
+  for (var i = 0; i < texts.length; i++) {
+    var el = document.createElement('li');
+    el.innerHTML = '<a href onclick="return false">' + texts[i].text + '</a>';
+
+    el.addEventListener('click', select.bind(el, i), false);
+    elTexts.appendChild(el);
+    els.push(el);
+  }
+
+  var el = document.createElement('li');
+  el.innerHTML = '<a href onclick="return false">Новый текст…</a>';
+
+  el.addEventListener('click', select.bind(el, -1), false);
+  elTexts.appendChild(el);
+  els.push(el);
+
+  select.call(el, -1);
+}
+
+loadData();
+updateRelations();
+updateTexts();
+</script>
+</body>
+</html>
