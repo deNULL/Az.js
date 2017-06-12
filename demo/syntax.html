@@ -12,144 +12,21 @@
   <script src="../src/az.syntax.js"></script>
   <script src="../dicts/syntax.js"></script>
   <style>
-    .token {
-      height: 18px;
-      max-width: 160px;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-      vertical-align: middle;
-      display: inline-block;
-      padding: 1px 5px;
-      border-radius: 3px;
-      margin: 2px;
-      background: #ECECEC;
-      cursor: default;
-    }
-    /* Simple tokens */
-    .token-CYRIL, .token-WORD, .morph-ADJF {
-      background: #FFBFBF;
-    }
-    .token-LATIN, .token-MIXED, .morph-ADJS {
-      background: #FF8686;
-    }
-    .token-PUNCT, .morph-VERB {
-      background: #B1BEFF;
-    }
-    .token-NUMBER, .morph-NOUN {
-      background: #A1EF82;;
-    }
-    .token-SPACE {
-      background: #ECECEC;
-    }
-    .token-OTHER {
-      background: #9E9E9E;
-      color: #FFF;
-    }
 
-    .token-LINK, .morph-INFN {
-      background: #1E1AFF;
-      color: #FFF;
-    }
-    .token-EMAIL, .morph-PRTF {
-      background: #13B5DA;
-      color: #FFF;
-    }
-    .morph-PRTS {
-      background: #0784a0;
-      color: #FFF;
-    }
-    .token-HASHTAG, .morph-GRND {
-      background: #9C2FFF;
-      color: #FFF;
-    }
-    .token-MARKUP, .morph-NUMR {
-      background: #2D9812;
-      color: #FFF;
-    }
-    .token-TAG, .morph-PREP {
-      background: #F79F00;
-      color: #FFF;
-    }
-    .token-CONTENT, .morph-CONJ {
-      background: #BFBF00;
-      color: #FFF;
-    }
-    .morph-COMP {
-      background: #ce5974;
-      color: #FFF;
-    }
-    .morph-ADVB {
-      background: #64edd4;
-    }
-    .morph-NPRO {
-      background: #97de49;
-    }
-    .morph-PRED {
-      background: #a93f92;
-      color: #FFF;
-    }
-    .morph-PRCL {
-      background: #fbeb2b;
-    }
-    .morph-INTJ {
-      background: #ff7818;
-      color: #FFF;
-    }
-    .morph-LATN {
-      background: #333;
-      color: #FFF;
-    }
-    .parse > div {
-      background: #fafafa;
-      color: #666;
-      border: 1px solid #e5e5e5;
-      border-radius: 4px;
-      border-bottom: none;
-    }
-
-    #syntaxResults {
-      overflow: auto;
-    }
-    td {
-      font-size: 12px;
-      text-align: center;
-    }
-    td.word {
-      font-weight: bold;
-    }
-    td.group:before {
-      content: "";
-      display: block;
-      border: 1px solid #fff;
-      border-bottom-color: #444;
-      border-radius: 12px;
-      height: 16px;
-      margin-top: -20px;
-    }
-    td.group {
-      cursor: pointer;
-    }
-    td.group.highlight {
-      color: #FF8686;
-    }
-    td.group.highlight:before {
-      border-bottom-color: #FF8686;
-    }
   </style>
 </head>
 <body style="padding: 20px">
   <div class="uk-grid uk-form">
     <div class="uk-width-large-1-2">
-      <h3>Текст для токенизации</h3>
-      <textarea id="text" class="pure-input-1" style="height: 270px; width: 100%" placeholder="Текст для разбора">Глокая куздра штеко бодланула бокра и кудрячит бокрёнка. Мама мыла раму.</textarea>
+      <h3>Фраза для разбора</h3>
+      <input id="phrase" type="text" style="width: 100%" placeholder="Фраза для разбора" value="">
 
-      <h3>Легенда</h3>
-      <p class="uk-clearfix" style="margin-bottom: 20px" id="tokensLegend"></p>
+      <h3>Варианты структуры</h3>
+      <div id="options"></div>
     </div>
     <div class="uk-width-large-1-2">
-      <h3 id="resultsHeader"></h3>
-      <div id="tokensResults"></div>
+      <h3>Шаблоны</h3>
+      <div id="templates"></div>
     </div>
   </div>
 
@@ -215,7 +92,7 @@
       html.push('<table><tr>');
       for (var i = 0; i < analysis.tokens.length; i++) {
         var safe = analysis.tokens[i].toString().split('&').join('&amp;').split('<').join('&lt;').split(' ').join('&nbsp;').split('\n').join('↵');
-        
+
         html.push('<td class="word">' + safe + '</td>');
       }
       html.push('</tr>');
@@ -230,7 +107,7 @@
             html.push('<td' + (group.st > last + 1 ? ' colspan=' + (group.st - last) : '') + '></td>');
           }
           html.push('<td' + (group.en > group.st ? ' colspan=' + (group.en - group.st + 1) : '') + ' id="group' + group.id + '" class="group" onmouseover="highlightGroup(\'' + group.id + '\', true)" onmouseout="highlightGroup(\'' + group.id + '\', false)">' +
-            '<span>' + group.type + (group.score < 1.0 ? ' (' + group.score.toFixed(2) + ')' : '') + '<br/>' + 
+            '<span>' + group.type + (group.score < 1.0 ? ' (' + group.score.toFixed(2) + ')' : '') + '<br/>' +
             '<small>' + group.tag.toString().split(',').slice(1).join(',') + '</small>' + '</span></td>');
           last = group.en + 1;
         }
@@ -263,7 +140,7 @@
 
     function toggleMode(morph) {
       morphMode = morph;
-      document.getElementById('resultsHeader').innerHTML = 
+      document.getElementById('resultsHeader').innerHTML =
         morph ?
           '<span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(false);">Результат токенизации</span> | Результат морфологического разбора' :
           'Результат токенизации | <span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(true);">Результат морфологического разбора</span>';

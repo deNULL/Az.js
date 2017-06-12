@@ -824,7 +824,7 @@
     var matcher = getMatcher(filter, exclude);
     var index = this.index;
     index++;
-    while (index < this.tokens.length && matcher(this.tokens[index], index, this.tokens)) {
+    while (index < this.tokens.length && !matcher(this.tokens[index], index, this.tokens)) {
       index++;
     }
     if (index < this.tokens.length) {
@@ -832,6 +832,18 @@
         this.index = index;
       }
       return this.tokens[index];
+    }
+    return null;
+  }
+
+  Tokens.nextToken = function(tokens, index, filter, exclude) {
+    var matcher = getMatcher(filter, exclude);
+    index++;
+    while (index < tokens.length && !matcher(tokens[index], index, tokens)) {
+      index++;
+    }
+    if (index < tokens.length) {
+      return tokens[index];
     }
     return null;
   }
@@ -863,7 +875,7 @@
     var matcher = getMatcher(filter, exclude);
     var index = this.index;
     index--;
-    while (index >= 0 && matcher(this.tokens[index], index, this.tokens)) {
+    while (index >= 0 && !matcher(this.tokens[index], index, this.tokens)) {
       index--;
     }
     if (index >= 0) {
@@ -871,6 +883,18 @@
         this.index = index;
       }
       return this.tokens[index];
+    }
+    return null;
+  }
+
+  Tokens.prevToken = function(tokens, index, filter, exclude) {
+    var matcher = getMatcher(filter, exclude);
+    index--;
+    while (index >= 0 && !matcher(tokens[index], index, tokens)) {
+      index--;
+    }
+    if (index >= 0) {
+      return tokens[index];
     }
     return null;
   }
