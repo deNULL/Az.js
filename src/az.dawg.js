@@ -129,7 +129,7 @@
     return this.value(index);
   }
 
-  DAWG.prototype.iterateAll = function(index) {
+  DAWG.prototype.iterateAll = function(index, match) {
     var results = [];
     var stack = [index];
     var key = [];
@@ -181,10 +181,11 @@
 
       // Only three formats supported
       if (this.format == 'words') {
-        results.push([
-          ((key[0] ^ 1) << 6) + (key[1] >> 1),
-          ((key[2] ^ 1) << 6) + (key[3] >> 1)
-        ]);
+        var pi = ((key[0] ^ 1) << 6) + (key[1] >> 1);
+        var fi = ((key[2] ^ 1) << 6) + (key[3] >> 1);
+        if (!match || (pi in match && fi in match[pi])) {
+          results.push([pi, fi]);
+        }
       } else
       if (this.format == 'probs') {
         results.push([
@@ -339,6 +340,113 @@
       }
     }
     return results;
+  }
+
+  DAWG.prototype.findAllMatching = function(payloads) {
+    var match = {};
+    for (var i = 0; i < payloads.length; i++) {
+      if (!(payloads[i][0] in match)) {
+        match[payloads[i][0]] = {};
+      }
+      match[payloads[i][0]][payloads[i][1]] = true;
+    }
+
+    var self = this;
+    var prefix = new Array(1000);
+    var len = 0;
+    var label, forms;
+    var results = [];
+    function iterate(index) {
+      var cur = self.followByte(1, index);
+      if (cur != MISSING) {
+        forms = self.iterateAll(cur, match);
+        if (forms.length) {
+          results.push([ prefix.slice(0, len).join(''), forms ]);
+        }
+      }
+
+      var label = self.guide[index << 1]; // First child
+      do {
+        cur = self.followByte(label, index);
+        if ((cur != MISSING) && (label in UCS2)) {
+          prefix[len] = UCS2[label];
+          len++;
+          iterate(cur);
+          len--;
+        }
+        label = self.guide[(cur << 1) + 1]; // Next child
+      } while (cur != MISSING);
+    }
+
+    iterate(ROOT);
+    return results;
+  }
+
+  DAWG.prototype.stats = function(payloads) {
+    var match = {};
+    for (var i = 0; i < payloads.length; i++) {
+      if (!(payloads[i][0] in match)) {
+        match[payloads[i][0]] = {};
+      }
+      match[payloads[i][0]][payloads[i][1]] = true;
+    }
+    var stats = {
+      syllables: {},
+      counts: {}
+    }
+
+    var self = this;
+    var prefix = new Array(1000);
+    var len = 0;
+    var label, forms;
+    var results = [];
+    function iterate(index) {
+      var cur = self.followByte(1, index);
+      if (cur != MISSING) {
+        if (match) {
+          forms = self.iterateAll(cur, match);
+        }
+        if (!match || forms.length) {
+          var word = prefix.slice(0, len).join('');
+          if (word.indexOf('лье') > -1) {
+            console.log(word);
+          }
+          var syllables = Az.Phoneme.toSyllables(word);
+          if (!(syllables.length in stats.counts)) {
+            stats.counts[syllables.length] = 1;
+          } else {
+            stats.counts[syllables.length]++;
+          }
+          for (var i = 0; i < syllables.length; i++) {
+            var counts;
+            if (!(syllables[i] in stats.syllables)) {
+              counts = stats.syllables[syllables[i]] = [0, 0, 0, 0];
+            } else {
+              counts = stats.syllables[syllables[i]];
+            }
+            counts[0]++;
+            if (syllables.length > 1) {
+              counts[i == 0 ? 1 : (i == syllables.length - 1 ? 3 : 2)]++;
+            }
+          }
+        }
+      }
+
+      var label = self.guide[index << 1]; // First child
+      do {
+        cur = self.followByte(label, index);
+        if ((cur != MISSING) && (label in UCS2)) {
+          prefix[len] = UCS2[label];
+          len++;
+          iterate(cur);
+          len--;
+        }
+        label = self.guide[(cur << 1) + 1]; // Next child
+      } while (cur != MISSING);
+    }
+
+    iterate(ROOT);
+    return stats;
   }
 
   return DAWG;
