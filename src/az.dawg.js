@@ -38,9 +38,9 @@
 
   // Based on all common ЙЦУКЕН-keyboards (both Windows and Apple variations)
   var COMMON_TYPOS = {
-    'й': 'ёцыф', 'ц': 'йфыву', 'у': 'цывак', 'к': 'увапе', 'е': 'капрн', 'н': 'епрог', 'г': 'нролш', 'ш': 'голдщ', 'щ': 'шлджз', 'з': 'щджэх-', 'х': 'зжэъ-', 'ъ': 'хэ-ё',
-    'ф': 'йцычяё', 'ы': 'йцувсчяф', 'в': 'цукамсчы', 'а': 'укепимсв', 'п': 'кенртима', 'р': 'енгоьтип', 'о': 'нгшлбьтр', 'л': 'гшщдюбьо', 'д': 'шщзжюбл', 'ж': 'щзхэюд', 'э': 'зхъжё',
-    'ё': 'йфяъэ', 'я': 'ёфыч', 'ч': 'яфывс', 'с': 'чывам', 'м': 'свапи', 'и': 'мапрт', 'т': 'ипроь', 'ь': 'тролб', 'б': 'ьолдю', 'ю': 'блдж',
+    'й': 'ёцыф', 'ц': 'йфыву', 'у': 'цывак', 'к': 'увапе', 'е': 'эикапрн', 'н': 'епрог', 'г': 'нролш', 'ш': 'жголдщ', 'щ': 'шлджз', 'з': 'щджэх-', 'х': 'зжэъ-', 'ъ': 'ьхэ-ё',
+    'ф': 'йцычяё', 'ы': 'иойцувсчяф', 'в': 'фцукамсчы', 'а': 'оукепимсв', 'п': 'кенртима', 'р': 'енгоьтип', 'о': 'ангшлбьтр', 'л': 'гшщдюбьо', 'д': 'шщзжюбл', 'ж': 'шщзхэюд', 'э': 'езхъжё',
+    'ё': 'йфяъэ', 'я': 'еёфыч', 'ч': 'яфывс', 'с': 'зчывам', 'м': 'свапи', 'и': 'яемапрт', 'т': 'дипроь', 'ь': 'ътролб', 'б': 'ьолдю', 'ю': 'блдж',
     '1': 'ёйц', '2': 'йцу', '3': 'цук', '4': 'уке', '5': 'кен', '6': 'енг', '7': 'нгш', '8': 'гшщ', '9': 'шщз', '0': 'щзх-', '-': 'зхъ', '=': '-хъ', '\\': 'ъэ', '.': 'южэ'
   };
 
@@ -221,7 +221,7 @@
 
       // Done
       if (len == str.length) {
-        if (typos < mtypos && !stutter) {
+        if (typos < mtypos && stutter <= mstutter) {
           // Allow missing letter(s) at the very end
           var label = this.guide[index << 1]; // First child
           do {
@@ -262,7 +262,7 @@
       }
 
       // Follow typos path (if not over limit)
-      if (typos < mtypos && !stutter) {
+      if (typos < mtypos && stutter <= mstutter) {
         // Skip a letter entirely (extra letter)
         prefixes.push([ prefix, len + 1, typos + 1, stutter, index ]);
 
@@ -320,7 +320,7 @@
         if (cur != MISSING) {
           prefixes.push([ prefix + str[len], len + 1, typos, stutter, cur ]);
 
-          while (stutter < mstutter && !typos && len < str.length - 1) {
+          while (stutter < mstutter && typos <= mtypos && len < str.length - 1) {
             // Follow a simple stutter path (merge two equal letters into one)
             if (str[len] == str[len + 1]) {
               prefixes.push([ prefix + str[len], len + 2, typos, stutter + 1, cur ]);
