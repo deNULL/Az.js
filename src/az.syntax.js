@@ -15,7 +15,7 @@
     this.roles = roles;
     this.id = [type];
     for (var i = 0; i < childs.length; i++) {
-      this.id.push(childs[i].id);
+      this.id.push(childs[i].group.id);
     }
     this.id = '(' + this.id.join('-') + ')';
     if (tag) {
@@ -48,7 +48,7 @@
     this.token = token;
     this.morph = morph;
     this.tag = tag || morph.tag;
-    this.childs = [this];
+    this.childs = [];
     this.id = _atom_id++;
 
     /*
@@ -93,7 +93,7 @@
         if (!(group instanceof AtomicSyntaxGroup)) {
           return false;
         }
-        if (group.morph.normalize() != template.literal) {
+        if (template.literal.indexOf(group.morph.normalize().toString()) == -1) {
           return false;
         }
       } else
@@ -112,7 +112,6 @@
           return false;
         }
       }
-
       // Also check constraints preemptively (so we don't have to go deeper when it's not needed)
       for (var i = 0; i < rule.constraints.length; i++) {
         var constraint = rule.constraints[i];

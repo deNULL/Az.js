@@ -1,4 +1,4 @@
-<html>
+<!doctype html><html>
 <head>
   <meta charset="utf-8">
   <title>Az Demo</title>
@@ -254,8 +254,8 @@
       var group = groups[id];
       if (group) {
         for (var i = 0; i < group.childs.length; i++) {
-          if (group.childs[i] != group) {
-            highlightGroup(group.childs[i].id, on);
+          if (group.childs[i].group != group) {
+            highlightGroup(group.childs[i].group.id, on);
           }
         }
       }
