@@ -104,6 +104,7 @@
       var noun = nouns[i];
       var np = noun.clone();
       var lastAnd = false;
+      np.type = 'NP';
       np.dets = [];
       np.noun = noun;
 
@@ -133,6 +134,16 @@
       if (lastAnd) {
         np.shift();
       }
+      if (noun.st - j >= 0) {
+        for (var k = 0; k < parses[noun.st - j].length; k++) {
+          var num = parses[noun.st - j][k];
+          if (num.matches({ POS: ['NUMB', 'NUMR'] })) {
+            np.prepend(tokens[noun.st - j], num);
+            np.num = num;
+            break;
+          }
+        }
+      }
       NPs.push(checkQuotes(parses, tokens, np));
     }
     return NPs;
@@ -150,6 +161,7 @@
         var np = NPs[k];
         if (np.en == dep.st - 1) {
           var poss = SyntaxGroup.fromGroups(np, dep);
+          poss.type = 'NP';
           poss.np = np;
           poss.dep = dep;
           POSSs.push(checkQuotes(parses, tokens, poss));
@@ -173,6 +185,7 @@
       }
 
       var pp = np.clone();
+      pp.type = 'PP';
       pp.np = np;
       for (var k = 0; k < parses[np.st - 1].length; k++) {
         var prep = parses[np.st - 1][k];
@@ -187,6 +200,246 @@
     }
     return PPs;
   }
+
+  // NP + PP = NP
+  // PRTF + PP = PRTF
+  function buildNounPrepPhrases(parses, tokens, NPs, PPs) {
+    var NPs2 = [];
+    for (var i = 0; i < PPs.length; i++) {
+      var dep = PPs[i];
+      if (dep.st == 0) {
+        continue;
+      }
+      for (var k = 0; k < NPs.length; k++) {
+        var np = NPs[k];
+        if (np.en == dep.st - 1) {
+          var np2 = SyntaxGroup.fromGroups(np, dep);
+          np2.type = np.type;
+          np2.np = np;
+          np2.dep = dep;
+          NPs2.push(checkQuotes(parses, tokens, np2));
+        }
+      }
+    }
+    return NPs2;
+  }
+
+  // PRTF + NOUN/NPRE
+  function buildPrtfNounPhrases(parses, tokens, PRTFs) {
+    var NPs = [];
+    for (var i = 0; i < PRTFs.length; i++) {
+      var det = PRTFs[i];
+      if (det.en + 1 >= parses.length - 1) {
+        continue;
+      }
+
+      for (var k = 0; k < parses[det.en + 1].length; k++) {
+        var noun = parses[det.en + 1][k];
+        if (noun.tag.matches({ POS: ['NOUN', 'NPRO'] }) &&
+            det.tag.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true)) {
+          var np = det.clone();
+          np.type = 'NP';
+          np.append(tokens[det.en + 1], noun);
+          np.tag = noun.tag;
+          np.noun = noun;
+          np.dets = [det];
+          NPs.push(checkQuotes(parses, tokens, np));
+        }
+      }
+    }
+    return NPs;
+  }
+
+  function buildVerbPredicates(parses, tokens, VERBs, NPPPs) {
+    var VPs = [];
+    var ends = {};
+    var starts = {};
+    for (var i = 0; i < NPPPs.length; i++) {
+      if (!(NPPPs[i].st in starts)) {
+        starts[NPPPs[i].st] = [];
+      }
+      starts[NPPPs[i].st].push(NPPPs[i]);
+      if (!(NPPPs[i].en in ends)) {
+        ends[NPPPs[i].en] = [];
+      }
+      ends[NPPPs[i].en].push(NPPPs[i]);
+    }
+
+    for (var i = 0; i < VERBs.length; i++) {
+      var verb = VERBs[i];
+      var vp = VERBs[i].clone();
+      vp.type = 'VP';
+      vp.verb = verb;
+      vp.pp = [];
+
+      var st = verb.st - 1;
+      while (ends[st]) {
+        var found = false;
+        for (var j = 0; j < ends[st].length; j++) {
+          var group = ends[st][j];
+          if (group.tag.ADVB) {
+            if (vp.advb) {
+              continue;
+            }
+          } else
+          if (group.tag.PRCL) {
+            if (['не', 'якобы'].indexOf(group.tokens[0].toLowerCase()) == -1) {
+              continue;
+            }
+          } else
+          if (group.tag.INFN) {
+            continue;
+          } else
+          if (group.type == 'NP') {
+            if (group.tag.nomn && verb.tag.indc) { // Possibly an object
+              if (vp.object) {
+                continue;
+              }
+              if (verb.tag.PErs && verb.tag.PErs != '3per') {
+                if (group.tag.PErs != verb.tag.PErs) {
+                  continue;
+                }
+              } else {
+                if (group.tag.PErs && group.tag.PErs != '3per') {
+                  continue;
+                }
+              }
+              if (!group.tag.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
+                continue;
+              }
+            } else
+            if (group.tag.accs && verb.tag.tran) { // Possibly an subject
+              if (vp.subject) {
+                continue;
+              }
+            } else
+            if (group.tag.gent || group.tag.datv || group.tag.ablt) {
+              if (vp[group.tag.CAse]) {
+                continue;
+              }
+            } else {
+              continue;
+            }
+          }
+          if (!found || found.st > group.st) {
+            found = group;
+          }
+        }
+        if (!found) {
+          break;
+        }
+
+        vp.prepend(found);
+        if (found.tag.ADVB) {
+          vp.advb = found;
+        } else
+        if (found.tag.PRCL) { // не
+          if (found.tokens[0].toLowerCase() == 'не') {
+            vp.negate = !vp.negate;
+          }
+        } else
+        if (found.type == 'NP') {
+          if (found.tag.nomn) {
+            vp.object = found;
+          } else
+          if (found.tag.accs) {
+            vp.subject = found;
+          } else {
+            vp[found.tag.CAse] = found;
+          }
+        } else {
+          vp.pp.push(found);
+        }
+        st = found.st - 1;
+      }
+
+
+      var en = verb.en + 1;
+      while (starts[en]) {
+        var found = false;
+        for (var j = 0; j < starts[en].length; j++) {
+          var group = starts[en][j];
+          if (group.tag.ADVB) {
+            if (vp.advb) {
+              continue;
+            }
+          } else
+          if (group.tag.PRCL) {
+            continue;
+          } else
+          if (group.tag.INFN) {
+            if (vp.modal) {
+              continue;
+            }
+          } else
+          if (group.type == 'NP') {
+            if (group.tag.nomn && verb.tag.indc) { // Possibly an object
+              if (vp.object) {
+                continue;
+              }
+              if (verb.tag.PErs && verb.tag.PErs != '3per') {
+                if (group.tag.PErs != verb.tag.PErs) {
+                  continue;
+                }
+              } else {
+                if (group.tag.PErs && group.tag.PErs != '3per') {
+                  continue;
+                }
+              }
+              if (!group.tag.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
+                continue;
+              }
+            } else
+            if (group.tag.accs && verb.tag.tran) { // Possibly an subject
+              if (vp.subject) {
+                continue;
+              }
+            } else
+            if (group.tag.gent || group.tag.datv || group.tag.ablt) {
+              if (vp[group.tag.CAse]) {
+                continue;
+              }
+            } else {
+              continue;
+            }
+          }
+          if (!found || found.en < group.en) {
+            found = group;
+          }
+        }
+        if (!found) {
+          break;
+        }
+
+        vp.append(found);
+        if (found.tag.ADVB) {
+          vp.advb = found;
+        } else
+        if (found.tag.INFN) {
+          vp.modal = vp.verb;
+          vp.verb = found;
+        } else
+        if (found.type == 'NP') {
+          if (found.tag.nomn) {
+            vp.object = found;
+          } else
+          if (found.tag.accs) {
+            vp.subject = found;
+          } else {
+            vp[found.tag.CAse] = found;
+          }
+        } else {
+          vp.pp.push(found);
+        }
+        en = found.en + 1;
+      }
+
+      VPs.push(vp);
+    }
+
+    return VPs;
+  }
+
 
   Syntax.parse = function(tokens, config) {
     //config = config ? Az.extend(this.config, config) : this.config;
@@ -234,12 +487,27 @@
     // For now, apply just simplest rules
 
     res.NP = buildNounPhrases(res.parses, res.tokens,
-      (res.NOUN || []).concat(res.NPRE || []));
+      (res.NOUN || []).concat(res.NPRO || []));
 
-    res.NP = res.NP.concat(buildPosessives(res.parses, res.tokens, res.NP));
-    res.NP = res.NP.concat(buildPosessives(res.parses, res.tokens, res.NP));
+    var NP = buildPosessives(res.parses, res.tokens, res.NP);
+    res.NP = res.NP.concat(NP, buildPosessives(res.parses, res.tokens, NP));
 
     res.PP = buildPrepPhrases(res.parses, res.tokens, res.NP);
+
+    NP = buildNounPrepPhrases(res.parses, res.tokens, res.NP, res.PP);
+    res.NP = res.NP.concat(NP);
+
+    var PP = buildPrepPhrases(res.parses, res.tokens, NP);
+    NP = buildNounPrepPhrases(res.parses, res.tokens, res.NP, PP);
+    res.NP = res.NP.concat(NP);
+
+    var PRTF = buildNounPrepPhrases(res.parses, res.tokens, res.PRTF || [], res.PP);
+    res.PRTF = (res.PRTF || []).concat(PRTF);
+    res.NP = res.NP.concat(buildPrtfNounPhrases(res.parses, res.tokens, PRTF));
+
+    res.VP = buildVerbPredicates(res.parses, res.tokens,
+      res.VERB || [],
+      res.NP.concat(res.PP, res.INFN || [], res.PRCL || [], res.ADVB || []));
 
     return res;
   }
