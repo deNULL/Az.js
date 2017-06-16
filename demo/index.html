@@ -9,6 +9,7 @@
   <script src="../src/az.dawg.js"></script>
   <script src="../src/az.morph.js"></script>
   <script src="../src/az.tokens.js"></script>
+  <script src="../src/az.syntax.js"></script>
   <style>
     .token {
       height: 18px;
@@ -151,7 +152,7 @@
 
     function toggleMode(morph) {
       morphMode = morph;
-      document.getElementById('resultsHeader').innerHTML = 
+      document.getElementById('resultsHeader').innerHTML =
         morph ?
           '<span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(false);">Результат токенизации</span> | Результат морфологического разбора' :
           'Результат токенизации | <span style="color: #2b587a; border-bottom: 1px dotted #2b587a; cursor: pointer;" onclick="toggleMode(true);">Результат морфологического разбора</span>';

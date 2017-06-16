@@ -1,0 +1,185 @@
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Az Syntax Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="//fonts.googleapis.com/css?family=Open+Sans:400,700,400italic,300,600&subset=latin,cyrillic,cyrillic-ext,latin-ext" rel="stylesheet" type="text/css">
+  <link href="uikit.css" rel="stylesheet">
+  <script
+    src="https://code.jquery.com/jquery-3.2.1.js"
+    integrity="sha256-DZAnKJ/6XZ9si04Hgrsxu/8s717jcIzLy3oi35EouyE="
+    crossorigin="anonymous"></script>
+  <script src="uikit.js"></script>
+  <script src="../src/az.js"></script>
+  <script src="../src/az.dawg.js"></script>
+  <script src="../src/az.morph.js"></script>
+  <script src="../src/az.tokens.js"></script>
+  <script src="../src/az.syntax.js"></script>
+  <style>
+#output {
+  font-size: 18px;
+  line-height: 24px;
+}
+#output .used {
+  background: #ffdddd;
+}
+.token.highlight {
+  background: #dd0000;
+  color: #fff;
+}
+#entities {
+  padding: 6px;
+}
+.entity {
+  font-size: 18px;
+  line-height: 24px;
+}
+.entity .tag {
+  border: 1px solid #ccc;
+  font-size: 11px;
+  margin-left: 10px;
+  padding: 0px 4px;
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+  </style>
+</head>
+<body style="padding: 20px">
+  <div class="uk-grid uk-form">
+    <div class="uk-width-1">
+      <h3>Текст</h3>
+      <p class="uk-clearfix" style="margin-bottom: 20px" id="output"></p>
+    </div>
+    <div class="uk-width-large-1-2">
+      <h3>Текст для разбора</h3>
+      <textarea id="text" class="pure-input-1" style="height: 500px; width: 100%; margin-bottom: 12px" placeholder="Текст для разбора">Текст (от лат. textus — «ткань; сплетение, связь, паутина, сочетание») — зафиксированная на каком-либо материальном носителе человеческая мысль; в общем плане связная и полная последовательность символов.
+
+Существуют две основные трактовки понятия «текст»: «имманентная» (расширенная, философски нагруженная) и «репрезентативная» (более частная). Имманентный подход подразумевает отношение к тексту как к автономной реальности, нацеленность на выявление его внутренней структуры. Репрезентативный — рассмотрение текста как особой формы представления знаний о внешней тексту действительности.
+
+В лингвистике термин текст используется в широком значении, включая и образцы устной речи. Восприятие текста изучается в рамках лингвистики текста и психолингвистики. Так, например, И. Р. Гальперин определяет текст следующим образом: «это письменное сообщение, объективированное в виде письменного документа, состоящее из ряда высказываний, объединённых разными типами лексической, грамматической и логической связи, имеющее определённый моральный характер, прагматическую установку и соответственно литературно обработанное»[1].</textarea>
+    </div>
+    <div id="entities-wrap" class="uk-width-large-1-2">
+      <div class="uk-button-dropdown" data-uk-dropdown="{justify:'#entities-wrap'}">
+        <button class="uk-button"><span id="sel-label">Сущности</span> <i class="uk-icon-caret-down"></i></button>
+        <div class="uk-dropdown uk-dropdown-bottom uk-dropdown-close" style="top: 30px; left: 0px;">
+          <ul class="uk-nav uk-nav-dropdown" id="sel-options">
+            <!--li><a href="#">Item</a></li-->
+          </ul>
+        </div>
+      </div>
+      <div id="entities"></div>
+    </div>
+  </div>
+
+  <script>
+    var selectedType;
+    var syntax;
+    Az.Morph.init('../dicts', function(err, Morph) {
+      Az.Syntax.init('../dicts', function(err, Syntax) {
+        function addType(type, descr) {
+          var el = document.createElement('li');
+          var anchor = document.createElement('a');
+          anchor.innerHTML = '<b>' + type + '</b>: ' + descr;
+          anchor.href = '';
+          anchor.addEventListener('click', function(e) {
+            for (var i = 0; i < els.length; i++) {
+              els[i].className = (els[i] == el) ? 'uk-active' : '';
+            }
+            selectedType = type;
+            document.getElementById('sel-label').innerText = anchor.innerText;
+            renderSyntax();
+            e.preventDefault();
+          }, false);
+          el.appendChild(anchor);
+          els.push(el);
+          document.getElementById('sel-options').appendChild(el);
+        }
+        document.getElementById('text').addEventListener('keyup', updateSyntax, false);
+        var used = {};
+        var grammemes = [];
+        var els = [];
+        addType('NP', 'именная группа');
+        addType('PP', 'предложная группа');
+        var el = document.createElement('li');
+        el.className = 'uk-nav-divider';
+        document.getElementById('sel-options').appendChild(el);
+        for (var k in Az.Morph.grammemes) {
+          if (Az.Morph.grammemes[k].parent != 'POST') {
+            continue;
+          }
+          if (used[Az.Morph.grammemes[k].internal]) {
+            continue;
+          }
+          used[Az.Morph.grammemes[k].internal] = true;
+
+          addType(Az.Morph.grammemes[k].internal, Az.Morph.grammemes[k].externalFull)
+        }
+        updateSyntax();
+      });
+    });
+
+    function updateSyntax() {
+      syntax = Az.Syntax.parse(document.getElementById('text').value);
+      console.log(syntax);
+      renderSyntax();
+    }
+    function renderSyntax() {
+      var en;
+      var used = {};
+      var list = document.getElementById('entities');
+      list.innerHTML = '';
+      if (selectedType && syntax[selectedType]) {
+        var entities = syntax[selectedType];
+        for (var i = 0; i < entities.length; i++) {
+          var entity = entities[i];
+          var el = document.createElement('div');
+          el.className = 'entity';
+          var str = [];
+          en = 0;
+          for (var j = entity.st; j <= entity.en; j++) {
+            used[j] = true;
+            if (j > entity.st) {
+              used[(j - 1) + '-' + j] = true;
+            }
+          }
+          for (var j = 0; j < entity.tokens.length; j++) {
+            if (j > 0 && entity.tokens[j].st > en) {
+              str.push(' ');
+            }
+            str.push(entity.parses[j] || entity.tokens[j]);
+            en = entity.tokens[j].st + entity.tokens[j].length;
+          }
+          el.innerText = str.join('');
+          if (entity.tag) {
+            var tag = document.createElement('span');
+            tag.className = 'tag';
+            tag.innerText = entity.tag.ext.toString();
+            el.appendChild(tag);
+          }
+          list.appendChild(el);
+        }
+      }
+
+      var output = document.getElementById('output');
+      output.innerHTML = '';
+      en = 0;
+      for (var i = 0; i < syntax.tokens.length; i++) {
+        var el;
+        var token = syntax.tokens[i];
+        if (token.st > en) {
+          el = document.createElement('span');
+          el.className = 'space' + (used[(i - 1) + '-' + i] ? ' used' : '');
+          el.innerText = ' ';
+          output.appendChild(el);
+        }
+        el = document.createElement('span');
+        el.id = 'token-' + i;
+        el.className = 'token' + (used[i] ? ' used' : '');
+        el.innerText = token.toString();
+        output.appendChild(el);
+        en = token.st + token.length;
+      }
+    }
+  </script>
+</body>
+</html>

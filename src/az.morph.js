@@ -138,7 +138,11 @@
    * @returns {boolean} Является ли текущий тег согласованным с указанным.
    */
   // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
-  Tag.prototype.matches = function(tag, grammemes) {
+  Tag.prototype.matches = function(tag, grammemes, ignoreMissing) {
+    if (ignoreMissing === undefined && typeof grammemes == 'boolean') {
+      ignoreMissing = grammemes;
+      grammemes = false;
+    }
     if (!grammemes) {
       if (Object.prototype.toString.call(tag) === '[object Array]') {
         for (var i = 0; i < tag.length; i++) {
@@ -151,11 +155,18 @@
       // Match to map
       for (var k in tag) {
         if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
-          if (!tag[k].indexOf(this[k])) {
+          var found = false;
+          for (var i = 0; i < tag[k].length; i++) {
+            if (tag[k][i] == this[k]) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
             return false;
           }
         } else {
-          if (tag[k] != this[k]) {
+          if (tag[k] != this[k] && (tag[k] !== false || this[k] !== undefined)) {
             return false;
           }
         }
@@ -163,15 +174,16 @@
       return true;
     }
 
-    if (tag instanceof Parse) {
+    if (!(tag instanceof Tag) && ('tag' in tag)) {
       tag = tag.tag;
     }
 
     // Match to another tag
     for (var i = 0; i < grammemes.length; i++) {
       if (tag[grammemes[i]] != this[grammemes[i]]) {
-        // Special case: tag.CAse
-        return false;
+        if (!ignoreMissing || ((grammemes[i] in tag) && (grammemes[i] in this))) {
+          return false;
+        }
       }
     }
     return true;
@@ -428,8 +440,8 @@
    * @returns {boolean} Является ли текущая форма слова согласованной с указанной.
    * @see Tag.matches
    */
-  Parse.prototype.matches = function(tag, grammemes) {
-    return this.tag.matches(tag, grammemes);
+  Parse.prototype.matches = function(tag, grammemes, ignoreMissing) {
+    return this.tag.matches(tag, grammemes, ignoreMissing);
   }
 
   /**
@@ -1097,6 +1109,7 @@
           externalFull: json[i][3]
         }
       }
+      Morph.grammemes = grammemes;
       loaded();
     });
 
@@ -1136,7 +1149,7 @@
         callback(err);
         return;
       }
-      
+
       var list = new Uint16Array(data),
           count = list[0],
           pos = 1;
