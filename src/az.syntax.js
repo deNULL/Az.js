@@ -3,11 +3,12 @@
   typeof define === 'function' && define.amd ? define('Az.Syntax', ['Az'], factory) :
   (global.Az = global.Az || {}) && (global.Az.Syntax = factory(global.Az))
 }(this, function (Az) { 'use strict';
-  var initialized, preps;
+  var initialized, prepCases;
   // TBD: Syntax analyzer
   var Group = function(st, en, tokens, parses, tag, score) {
     this.st = st;
     this.en = en;
+    this.length = en - st + 1;
     this.tokens = tokens;
     this.parses = parses;
     this.tag = tag;
@@ -37,10 +38,12 @@
     } else
     if (token instanceof Array) {
       this.st -= token.length;
+      this.length += token.length;
       this.tokens = token.concat(this.tokens);
       this.parses = parse.concat(this.parses);
     } else {
       this.st--;
+      this.length++;
       this.tokens.unshift(token);
       this.parses.unshift(parse);
     }
@@ -48,6 +51,7 @@
 
   Group.prototype.shift = function() {
     this.st++;
+    this.length--;
     this.tokens.shift();
     this.parses.shift();
   }
@@ -58,10 +62,12 @@
     } else
     if (token instanceof Array) {
       this.en += token.length;
+      this.length += token.length;
       this.tokens = this.tokens.concat(token);
       this.parses = this.parses.concat(parse);
     } else {
       this.en++;
+      this.length++;
       this.tokens.push(token);
       this.parses.push(parse);
     }
@@ -69,11 +75,29 @@
 
   Group.prototype.pop = function() {
     this.en--;
+    this.length--;
     this.tokens.pop();
     this.parses.pop();
   }
 
-  GroupCollection = function() {
+  Group.prototype.matches = function() {
+    return this.tag.matches.apply(this.tag, arguments);
+  }
+
+  Group.prototype.toLowerCase = function() {
+    var str = [];
+    var en;
+    for (var j = 0; j < this.tokens.length; j++) {
+      if (j > 0 && this.tokens[j].st > en) {
+        str.push(' ');
+      }
+      str.push(((this.parses[j] || this.tokens[j]) + '').toLocaleLowerCase());
+      en = this.tokens[j].st + this.tokens[j].length;
+    }
+    return str.join('');
+  }
+
+  var GroupCollection = function() {
     this.list = [];
     this.starts = {};
     this.ends = {};
@@ -123,44 +147,114 @@
   }
 
   GroupCollection.prototype.each = GroupCollection.prototype.forEach = function(func) {
-    return this.list.forEach(func);
+    for (var i = 0; i < this.list.length; i++) {
+      var result = func(this.list[i], i);
+      if (result === false) {
+        break;
+      }
+    }
   }
 
   GroupCollection.prototype.before = function(index, func) {
-    index--;
+    index = (index.st || index) - 1;
     if (index in this.ends) {
-      this.ends[index].forEach(func);
+      var list = this.ends[index];
+      for (var i = 0; i < list.length; i++) {
+        var result = func(list[i], i);
+        if (result === false) {
+          break;
+        }
+      }
     }
+  }
+
+  GroupCollection.prototype.longestBefore = function(index, func) {
+    index = (index.st || index) - 1;
+    var longest = false;
+    if (index in this.ends) {
+      var list = this.ends[index];
+      for (var i = 0; i < list.length; i++) {
+        var result = func ? func(list[i], i) : list[i];
+        if (result && (!longest || longest.length < result.length)) {
+          longest = result;
+        }
+      }
+    }
+    return longest;
   }
 
   GroupCollection.prototype.after = function(index, func) {
-    index++;
+    index = (index.en || index) + 1;
     if (index in this.starts) {
-      this.starts[index].forEach(func);
+      var list = this.starts[index];
+      for (var i = 0; i < list.length; i++) {
+        var result = func(list[i], i);
+        if (result === false) {
+          break;
+        }
+      }
     }
   }
 
-  GroupCollection.before = function() {
-    var index = arguments[arguments.length - 2];
-    var func = arguments[arguments.length - 1];
-    for (var i = 0; i < arguments.length - 2; i++) {
-      arguments[i].before(index, func);
+  GroupCollection.prototype.longestAfter = function(index, func) {
+    index = (index.en || index) + 1;
+    var longest = false;
+    if (index in this.starts) {
+      var list = this.starts[index];
+      for (var i = 0; i < list.length; i++) {
+        var result = func ? func(list[i], i) : list[i];
+        if (result && (!longest || longest.length < result.length)) {
+          longest = result;
+        }
+      }
+    }
+    return longest;
+  }
+
+  GroupCollection.each = GroupCollection.forEach = function(array, func) {
+    for (var i = 0; i < array.length; i++) {
+      array[i].each(func);
     }
   }
 
-  GroupCollection.after = function() {
-    var index = arguments[arguments.length - 2];
-    var func = arguments[arguments.length - 1];
-    for (var i = 0; i < arguments.length - 2; i++) {
-      arguments[i].after(index, func);
+  GroupCollection.before = function(array, index, func) {
+    for (var i = 0; i < array.length; i++) {
+      array[i].before(index, func);
     }
   }
 
-  var Syntax = function() {
-
+  GroupCollection.longestBefore = function(array, index, func) {
+    var longest = false;
+    for (var i = 0; i < array.length; i++) {
+      var cur = array[i].longestBefore(index, func);
+      if (cur && (!longest || longest.length < cur.length)) {
+        longest = cur;
+      }
+    }
+    return longest;
   }
 
-  Syntax.parse = function(tokens, config) {
+  GroupCollection.after = function(array, index, func) {
+    for (var i = 0; i < array.length; i++) {
+      array[i].after(index, func);
+    }
+  }
+
+  GroupCollection.longestAfter = function(array, index, func) {
+    var longest = false;
+    for (var i = 0; i < array.length; i++) {
+      var cur = array[i].longestAfter(index, func);
+      if (cur && (!longest || longest.length < cur.length)) {
+        longest = cur;
+      }
+    }
+    return longest;
+  }
+
+  var Syntax = function(tokens, config) {
+    if (!(this instanceof Syntax)) {
+      return new Syntax(tokens, config);
+    }
 
     function checkQuotes(group) {
       if (group.before || group.after || group.st == 0 || group.en == parses.length - 1) {
@@ -182,419 +276,364 @@
       return group;
     }
 
-    function buildNames(nouns) {
-      var NMs = [];
-      for (var i = 0; i < nouns.length; i++) {
-        var name = nouns[i];
-        if (name.tag.Name) {
-          var nm = name.clone();
+    function buildNames(names) {
+      var NMs = new GroupCollection();
+      GroupCollection.each(names, function(name1, i) {
+        if (name1.tag.Name) {
+          var nm = name1.clone();
           nm.type = 'NP';
           nm.dets = [];
-          nm.noun = name;
-          nm.name = name;
+          nm.noun = name1;
+          nm.name = name1;
 
-          for (var j = 0; j < nouns.length; j++) {
-            if ((nouns[j].tag.Surn || nouns[j].tag.Patr || nouns[j].tag.Abbr) && nouns[j].st == nm.en + 1) {
-              if (!nm.tag.matches(nouns[j], ['NMbr', 'CAse', 'GNdr'], true)) {
-                continue;
+          GroupCollection.after(names, nm.name, function(name2, j) {
+            if (name2.tag.Surn || name2.tag.Patr || name2.tag.Abbr) {
+              if (!name1.matches(name2, ['NMbr', 'CAse', 'GNdr'], true)) {
+                return;
               }
-              nm.append(nouns[j]);
-              if (nouns[j].tag.Surn) {
-                nm.surname = nouns[j];
+              nm.append(name2);
+              if (name2.tag.Surn) {
+                nm.surname = name2;
               } else {
-                nm.patronymic = nouns[j];
+                nm.patronymic = name2;
               }
-              break;
+              return false;
             }
-          }
+          });
           if (nm.patronymic) {
-            for (var j = 0; j < nouns.length; j++) {
-              if (nouns[j].tag.Surn && nouns[j].st == nm.patronymic.en + 1) {
-                if (!nm.tag.matches(nouns[j], ['NMbr', 'CAse', 'GNdr'], true)) {
-                  continue;
+            GroupCollection.after(names, nm.patronymic, function(name3, j) {
+              if (name3.tag.Surn) {
+                if (!name1.matches(name3, ['NMbr', 'CAse', 'GNdr'], true)) {
+                  return;
                 }
-                nm.append(nouns[j]);
-                nm.surname = nouns[j];
-                break;
+                nm.append(name3);
+                nm.surname = name3;
+                return false;
               }
-            }
+            });
           }
           if (!nm.surname) {
-            for (var j = 0; j < nouns.length; j++) {
-              if (nouns[j].tag.Surn && nouns[j].en == nm.st - 1) {
-                if (!nm.tag.matches(nouns[j], ['NMbr', 'CAse', 'GNdr'], true)) {
-                  continue;
+            GroupCollection.before(names, nm.name, function(name3, j) {
+              if (name3.tag.Surn) {
+                if (!name1.matches(name3, ['NMbr', 'CAse', 'GNdr'], true)) {
+                  return;
                 }
-                nm.append(nouns[j]);
-                nm.surname = nouns[j];
-                break;
+                nm.prepend(name3);
+                nm.surname = name3;
+                return false;
               }
-            }
+            });
           }
 
-          NMs.push(checkQuotes(nm));
+          NMs.add(checkQuotes(nm));
         } else
-        if (name.tag.Surn) {
-          var nm = name.clone();
+        if (name1.tag.Surn) {
+          var nm = name1.clone();
           nm.type = 'NP';
           nm.dets = [];
-          nm.noun = name;
-          nm.surname = name;
-          NMs.push(checkQuotes(nm));
+          nm.noun = name1;
+          nm.surname = name1;
+          NMs.add(checkQuotes(nm));
         }
-      }
+      });
       return NMs;
     }
 
     // ADJ + ADJ + ... + NOUN = NOUN PHRASE
-    function buildNounPhrases(nouns) {
-      var NPs = [];
-      for (var i = 0; i < nouns.length; i++) {
-        var noun = nouns[i];
+    function buildNounPhrases(nouns, adjfs, numbs) {
+      var NPs = new GroupCollection();
+      GroupCollection.each(nouns, function(noun, i) {
         var np = noun.clone();
-        var lastAnd = false;
         np.type = 'NP';
         np.dets = [];
         np.noun = noun;
 
-        for (var j = 1; j < 3 && noun.st - j >= 0; j++) {
-          var found = false;
-          for (var k = 0; k < parses[noun.st - j].length; k++) {
-            var adj = parses[noun.st - j][k];
-            if (adj.matches({ POS: ['ADJF', 'PRTF'] }) &&
-                adj.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true)) {
-              found = true;
-              lastAnd = false;
-              np.prepend(tokens[noun.st - j], adj);
-              np.dets.unshift(adj);
-              break;
-            } else
-            if ((j == 2) && (tokens[noun.st - j].toLowerCase() == 'и')) {
-              found = true;
-              lastAnd = true;
-              np.prepend(tokens[noun.st - j], adj);
-              break;
+        var last = noun;
+        for (var j = 1; j < 3 && last.st - 1 >= 0; j++) {
+          var adj = GroupCollection.longestBefore(adjfs, last, function(adj, k) {
+            if ((adj.tag.CONJ && adj.toLowerCase() == 'и') ||
+                (!adj.tag.CONJ && adj.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true))) {
+              return adj;
             }
-          }
-          if (!found) {
+          });
+          if (adj) {
+            last = adj;
+            np.prepend(adj);
+            if (!adj.tag.CONJ) {
+              np.dets.unshift(adj);
+            }
+          } else {
             break;
           }
         }
-        if (lastAnd) {
+        if (last.tag.CONJ) {
           np.shift();
         }
-        if (noun.st - j >= 0) {
-          for (var k = 0; k < parses[noun.st - j].length; k++) {
-            var num = parses[noun.st - j][k];
-            if (num.matches({ POS: ['NUMB', 'NUMR'] })) {
-              np.prepend(tokens[noun.st - j], num);
-              np.num = num;
-              break;
-            }
+        if (last.st - 1 >= 0) {
+          var num = GroupCollection.longestBefore(numbs, last);
+          if (num) {
+            np.prepend(num);
+            np.num = num;
           }
         }
-        NPs.push(checkQuotes(np));
-      }
+        NPs.add(checkQuotes(np));
+      });
       return NPs;
     }
 
     // NP + NP = NP
-    function buildPosessives(NPs) {
-      var POSSs = [];
-      for (var i = 0; i < NPs.length; i++) {
-        var dep = NPs[i];
-        if (dep.st == 0 || !dep.tag.matches({ CAse: 'gent' })) {
-          continue;
+    function buildPosessives(nouns) {
+      var POSSs = new GroupCollection();
+      GroupCollection.each(nouns, function(noun, i) {
+        if (!noun.matches({ CAse: 'gent' })) {
+          return;
         }
-        for (var k = 0; k < NPs.length; k++) {
-          var np = NPs[k];
-          if (np.en == dep.st - 1) {
-            var poss = Group.fromGroups(np, dep);
-            poss.type = 'NP';
-            poss.np = np;
-            poss.dep = dep;
-            POSSs.push(checkQuotes(poss));
-          }
+
+        var pnoun = GroupCollection.longestBefore(nouns, noun);
+        if (pnoun) {
+          var poss = Group.fromGroups(pnoun, noun);
+          poss.type = 'NP';
+          poss.np = pnoun;
+          poss.dep = noun;
+          POSSs.add(checkQuotes(poss));
         }
-      }
+      });
       return POSSs;
     }
 
     // PREP + NOUN/NP = PREP PHRASE
-    function buildPrepPhrases(NPs) {
-      var PPs = [];
-      for (var i = 0; i < NPs.length; i++) {
-        var np = NPs[i];
-        if (np.st == 0) {
-          continue;
+    function buildPrepPhrases(nouns, preps) {
+      var PPs = new GroupCollection();
+      GroupCollection.each(preps, function(prep, i) {
+        var str = prep.toLowerCase();
+        if (!(str in prepCases)) { // This should never happen (as long as 'preps.json' contain actual info)
+          return;
         }
-
-        for (var k = 0; k < parses[np.st - 1].length; k++) {
-          var prep = parses[np.st - 1][k];
-          if (prep.tag.PREP) {
-            var str = tokens[np.st - 1].toLowerCase();
-            if ((str in preps) && np.tag.matches({ CAse: preps[str] })) {
-              var pp = np.clone();
-              pp.type = 'PP';
-              pp.np = np;
-              pp.prepend(tokens[np.st - 1], prep);
-              pp.prep = prep;
-              PPs.push(checkQuotes(pp));
-              break;
-            }
+        var noun = GroupCollection.longestAfter(nouns, prep, function(noun, j) {
+          if (noun.matches({ CAse: prepCases[str] })) {
+            return noun;
           }
+        });
+        if (noun) {
+          var pp = noun.clone();
+          pp.type = 'PP';
+          pp.np = noun;
+          pp.prepend(prep);
+          pp.prep = prep;
+          PPs.add(checkQuotes(pp));
         }
-      }
+      });
       return PPs;
     }
 
     // NP + PP = NP
     // PRTF + PP = PRTF
-    function buildNounPrepPhrases(NPs, PPs) {
-      var NPs2 = [];
-      for (var i = 0; i < PPs.length; i++) {
-        var dep = PPs[i];
-        if (dep.st == 0) {
-          continue;
+    function buildNounPrepPhrases(nouns, pnouns) {
+      var NPs = new GroupCollection();
+      GroupCollection.each(pnouns, function(pnoun, i) {
+        var noun = GroupCollection.longestBefore(nouns, pnoun);
+        if (noun) {
+          var np = Group.fromGroups(noun, pnoun);
+          np.type = noun.type;
+          np.np = noun;
+          np.dep = pnoun;
+          NPs.add(checkQuotes(np));
         }
-        for (var k = 0; k < NPs.length; k++) {
-          var np = NPs[k];
-          if (np.en == dep.st - 1) {
-            var np2 = Group.fromGroups(np, dep);
-            np2.type = np.type;
-            np2.np = np;
-            np2.dep = dep;
-            NPs2.push(checkQuotes(np2));
-          }
-        }
-      }
-      return NPs2;
-    }
-
-    // PRTF + NOUN/NPRE
-    function buildPrtfNounPhrases(PRTFs) {
-      var NPs = [];
-      for (var i = 0; i < PRTFs.length; i++) {
-        var det = PRTFs[i];
-        if (det.en + 1 >= parses.length - 1) {
-          continue;
-        }
-
-        for (var k = 0; k < parses[det.en + 1].length; k++) {
-          var noun = parses[det.en + 1][k];
-          if (noun.tag.matches({ POS: ['NOUN', 'NPRO'] }) &&
-              det.tag.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true)) {
-            var np = det.clone();
-            np.type = 'NP';
-            np.append(tokens[det.en + 1], noun);
-            np.tag = noun.tag;
-            np.noun = noun;
-            np.dets = [det];
-            NPs.push(checkQuotes(np));
-          }
-        }
-      }
+      });
       return NPs;
     }
 
-    function buildVerbPredicates(VERBs, NPPPs) {
-      var VPs = [];
-      var ends = {};
-      var starts = {};
-      for (var i = 0; i < NPPPs.length; i++) {
-        if (!(NPPPs[i].st in starts)) {
-          starts[NPPPs[i].st] = [];
+    // PRTF + NOUN/NPRE
+    function buildPrtfNounPhrases(prtfs, nouns) {
+      var NPs = new GroupCollection();
+      GroupCollection.each(prtfs, function(prtf, i) {
+        var noun = GroupCollection.longestAfter(nouns, prtf, function(noun) {
+          if (prtf.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true)) {
+            return noun;
+          }
+        });
+        if (noun) {
+          var np = prtf.clone();
+          np.type = 'NP';
+          np.append(noun);
+          np.tag = noun.tag;
+          np.noun = noun;
+          np.dets = [prtf];
+          NPs.add(checkQuotes(np));
         }
-        starts[NPPPs[i].st].push(NPPPs[i]);
-        if (!(NPPPs[i].en in ends)) {
-          ends[NPPPs[i].en] = [];
-        }
-        ends[NPPPs[i].en].push(NPPPs[i]);
-      }
+      });
+      return NPs;
+    }
 
-      for (var i = 0; i < VERBs.length; i++) {
-        var verb = VERBs[i];
-        var vp = VERBs[i].clone();
+    function buildVerbPredicates(verbs, pps) {
+      var VPs = new GroupCollection();
+
+      GroupCollection.each(verbs, function(verb) {
+        var vp = verb.clone();
         vp.type = 'VP';
         vp.verb = verb;
         vp.pp = [];
 
-        var st = verb.st - 1;
-        while (ends[st]) {
-          var found = false;
-          for (var j = 0; j < ends[st].length; j++) {
-            var group = ends[st][j];
+        var last = verb;
+        while (last) { // Iterate prefixes
+          last = GroupCollection.longestBefore(pps, last, function(group) {
             if (group.tag.ADVB) {
               if (vp.advb) {
-                continue;
+                return;
               }
             } else
             if (group.tag.PRCL) {
-              if (['не', 'якобы'].indexOf(group.tokens[0].toLowerCase()) == -1) {
-                continue;
+              if (['не', 'якобы'].indexOf(group.toLowerCase()) == -1) {
+                return;
               }
             } else
             if (group.tag.INFN) {
-              continue;
+              return;
             } else
             if (group.type == 'NP') {
               if (group.tag.nomn && verb.tag.indc) { // Possibly an object
                 if (vp.object) {
-                  continue;
+                  return;
                 }
                 if (verb.tag.PErs && verb.tag.PErs != '3per') {
                   if (group.tag.PErs != verb.tag.PErs) {
-                    continue;
+                    return;
                   }
                 } else {
                   if (group.tag.PErs && group.tag.PErs != '3per') {
-                    continue;
+                    return;
                   }
                 }
-                if (!group.tag.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
-                  continue;
+                if (!group.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
+                  return;
                 }
               } else
               if (group.tag.accs && verb.tag.tran) { // Possibly an subject
                 if (vp.subject) {
-                  continue;
+                  return;
                 }
               } else
               if (group.tag.gent || group.tag.datv || group.tag.ablt) {
                 if (vp[group.tag.CAse]) {
-                  continue;
+                  return;
                 }
               } else {
-                continue;
+                return;
               }
             }
-            if (!found || found.st > group.st) {
-              found = group;
-            }
-          }
-          if (!found) {
-            break;
-          }
+            return group;
+          });
 
-          vp.prepend(found);
-          if (found.tag.ADVB) {
-            vp.advb = found;
-          } else
-          if (found.tag.PRCL) { // не
-            if (found.tokens[0].toLowerCase() == 'не') {
-              vp.negate = !vp.negate;
-            }
-          } else
-          if (found.type == 'NP') {
-            if (found.tag.nomn) {
-              vp.object = found;
+          if (last) {
+            vp.prepend(last);
+            if (last.tag.ADVB) {
+              vp.advb = last;
             } else
-            if (found.tag.accs) {
-              vp.subject = found;
+            if (last.tag.PRCL) { // не
+              if (last.tokens[0].toLowerCase() == 'не') {
+                vp.negate = !vp.negate;
+              }
+            } else
+            if (last.type == 'NP') {
+              if (last.tag.nomn) {
+                vp.object = last;
+              } else
+              if (last.tag.accs) {
+                vp.subject = last;
+              } else {
+                vp[last.tag.CAse] = last;
+              }
             } else {
-              vp[found.tag.CAse] = found;
+              vp.pp.push(last);
             }
-          } else {
-            vp.pp.push(found);
           }
-          st = found.st - 1;
         }
 
-
-        var en = verb.en + 1;
-        while (starts[en]) {
-          var found = false;
-          for (var j = 0; j < starts[en].length; j++) {
-            var group = starts[en][j];
+        last = verb;
+        while (last) { // Iterate postfixes
+          last = GroupCollection.longestAfter(pps, last, function(group) {
             if (group.tag.ADVB) {
-              if (vp.advb) {
-                continue;
+              if (vp.advb || group.tag.Ques) {
+                return;
               }
             } else
             if (group.tag.PRCL) {
-              continue;
+              return;
             } else
             if (group.tag.INFN) {
               if (vp.modal) {
-                continue;
+                return;
               }
             } else
             if (group.type == 'NP') {
               if (group.tag.nomn && verb.tag.indc) { // Possibly an object
                 if (vp.object) {
-                  continue;
+                  return;
                 }
                 if (verb.tag.PErs && verb.tag.PErs != '3per') {
                   if (group.tag.PErs != verb.tag.PErs) {
-                    continue;
+                    return;
                   }
                 } else {
                   if (group.tag.PErs && group.tag.PErs != '3per') {
-                    continue;
+                    return;
                   }
                 }
-                if (!group.tag.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
-                  continue;
+                if (!group.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
+                  return;
                 }
               } else
               if (group.tag.accs && verb.tag.tran) { // Possibly an subject
                 if (vp.subject) {
-                  continue;
+                  return;
                 }
               } else
               if (group.tag.gent || group.tag.datv || group.tag.ablt) {
                 if (vp[group.tag.CAse]) {
-                  continue;
+                  return;
                 }
               } else {
-                continue;
+                return;
               }
             }
-            if (!found || found.en < group.en) {
-              found = group;
-            }
-          }
-          if (!found) {
-            break;
-          }
+            return group;
+          });
 
-          vp.append(found);
-          if (found.tag.ADVB) {
-            vp.advb = found;
-          } else
-          if (found.tag.INFN) {
-            vp.modal = vp.verb;
-            vp.verb = found;
-          } else
-          if (found.type == 'NP') {
-            if (found.tag.nomn) {
-              vp.object = found;
+          if (last) {
+            vp.append(last);
+            if (last.tag.ADVB) {
+              vp.advb = last;
             } else
-            if (found.tag.accs) {
-              vp.subject = found;
+            if (last.tag.INFN) {
+              vp.modal = vp.verb;
+              vp.verb = last;
+            } else
+            if (last.type == 'NP') {
+              if (last.tag.nomn) {
+                vp.object = last;
+              } else
+              if (last.tag.accs) {
+                vp.subject = last;
+              } else {
+                vp[last.tag.CAse] = last;
+              }
             } else {
-              vp[found.tag.CAse] = found;
+              vp.pp.push(last);
             }
-          } else {
-            vp.pp.push(found);
           }
-          en = found.en + 1;
         }
 
-        VPs.push(checkQuotes(vp));
-      }
-
+        VPs.add(checkQuotes(vp));
+      })
       return VPs;
     }
 
     // Syntax.parse STARTS HERE
+    var Sn = this;
 
     //config = config ? Az.extend(this.config, config) : this.config;
-    tokens = (typeof tokens == 'string') ? Az.Tokens(tokens).done(['SPACE'], true) : tokens;
-    var res = {
-      tokens: tokens,
-      parses: []
-    };
+    Sn.tokens = tokens = (typeof tokens == 'string') ? Az.Tokens(tokens).done(['SPACE'], true) : tokens;
+    Sn.parses = [];
 
     var genericNoun = new Az.Morph.Tag('NOUN,Fixd,Name,Surn,Geox,Orgn ');
     genericNoun.ext = new Az.Morph.Tag('СУЩ,0,имя,фам,гео,орг ');
@@ -627,8 +666,11 @@
             var str = tokens[i].toLowerCase();
             if ((str == 'невзирая' || str == 'несмотря') && (i < tokens.length - 1) && (tokens[i + 1].toString() == 'на')) {
               group.append(tokens[i + 1], parses[i + 1][0]);
-              groups.append(group);
+              groups.push(group);
+              filtered.push(parse);
+              Sn.parses.push(filtered);
               i++;
+              filtered = [];
               break;
             }
           }
@@ -637,49 +679,70 @@
         }
         filtered.push(parse);
       }
-      res.parses.push(filtered);
+      Sn.parses.push(filtered);
     }
-    parses = res.parses;
+    parses = Sn.parses;
+
+    for (var k in Az.Morph.grammemes) {
+      if (Az.Morph.grammemes[k].parent == 'POST') {
+        var post = Az.Morph.grammemes[k].internal;
+        if (post && !(post in Sn)) {
+          Sn[post] = new GroupCollection();
+        }
+      }
+    }
+
+    ['NM', 'NP', 'PP', 'VP', 'PNCT', 'NUMB', 'LATN'].forEach(function(name) {
+      Sn[name] = new GroupCollection();
+    });
 
     for (var i = 0; i < groups.length; i++) {
       var tag = groups[i].tag;
-      if (!(tag.POS in res)) {
-        res[tag.POS] = [];
-      }
-      res[tag.POS].push(checkQuotes(groups[i]));
+      Sn[tag.POS].add(checkQuotes(groups[i]));
     }
 
     // For now, apply just simplest rules
 
     // TODO: LATN -> NOUN
     // TODO: Names
-    res.NP = res.NM = buildNames((res.NOUN || []).concat(res.NPRO || []));
+    var Names = buildNames([Sn.NOUN, Sn.NPRO]);
+    Sn.NP.merge(Names);
+    Sn.NM.merge(Names);
     // TODO: Dates
     // TODO: Numbers
 
-    res.NP = res.NP.concat(buildNounPhrases((res.NOUN || []).concat(res.NPRO || [])));
+    // [широком] [значении]
+    var Noun1 = buildNounPhrases(
+      [Sn.NOUN, Sn.NPRO],
+      [Sn.ADJF, Sn.PRTF, Sn.CONJ],
+      [Sn.NUMB, Sn.NUMR]
+    );
+    Sn.NP.merge(Noun1);
 
-    var NP = buildPosessives(res.NP);
-    res.NP = res.NP.concat(NP, buildPosessives(NP));
 
-    res.PP = buildPrepPhrases(res.NP);
+    var Poss1 = buildPosessives([Sn.NP]); // [лингвистики] [текста]
+    var Poss2 = buildPosessives([Poss1]); // [рамках] [лингвистики текста]
+    Sn.NP.merge(Poss1, Poss2);
 
-    NP = buildNounPrepPhrases(res.NP, res.PP);
-    res.NP = res.NP.concat(NP);
+    var Prep1 = buildPrepPhrases([Sn.NP], [Sn.PREP]);// [в] [рамках лингвистики текста]
+    var NounPrep1 = buildNounPrepPhrases([Sn.NP], [Prep1]); // [отношение] [к тексту]
+    Sn.PP.merge(Prep1);
+    Sn.NP.merge(NounPrep1);
 
-    var PP = buildPrepPhrases(NP);
-    NP = buildNounPrepPhrases(res.NP, PP);
-    res.NP = res.NP.concat(NP);
+    var Prep2 = buildPrepPhrases([NounPrep1], [Sn.PREP]); // [через] [секунду после запуска]
+    var NounPrep2 = buildNounPrepPhrases([Sn.NP], [Prep2]);
+    Sn.PP.merge(Prep2);
+    Sn.NP.merge(NounPrep2);
 
-    var PRTF = buildNounPrepPhrases(res.PRTF || [], res.PP);
-    res.PRTF = (res.PRTF || []).concat(PRTF);
-    res.NP = res.NP.concat(buildPrtfNounPhrases(PRTF));
+    var Prtf = buildNounPrepPhrases([Sn.PRTF], [Sn.PP]);
+    var PrtfNoun = buildPrtfNounPhrases([Prtf], [Sn.NP]);
+    Sn.PRTF.merge(Prtf);
+    Sn.NP.merge(PrtfNoun);
 
-    res.VP = buildVerbPredicates(
-      res.VERB || [],
-      res.NP.concat(res.PP, res.INFN || [], res.PRCL || [], res.ADVB || []));
+    // Another round of buildNounPhrases?
 
-    return res;
+    var Verb = buildVerbPredicates([Sn.VERB], [Sn.NP, Sn.PP, Sn.INFN, Sn.PRCL, Sn.ADVB]);
+    Sn.VP.merge(Verb);
   }
 
   Syntax.init = function(path, callback) {
@@ -707,7 +770,7 @@
         callback(err);
         return;
       }
-      preps = json;
+      prepCases = json;
       loaded();
     });
   }

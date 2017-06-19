@@ -126,7 +126,7 @@
     });
 
     function updateSyntax() {
-      syntax = Az.Syntax.parse(document.getElementById('text').value);
+      syntax = new Az.Syntax(document.getElementById('text').value);
       console.log(syntax);
       renderSyntax();
     }
@@ -137,8 +137,8 @@
       list.innerHTML = '';
       if (selectedType && syntax[selectedType]) {
         var entities = syntax[selectedType];
-        for (var i = 0; i < entities.length; i++) {
-          var entity = entities[i];
+        for (var i = 0; i < entities.list.length; i++) {
+          var entity = entities.list[i];
           var el = document.createElement('div');
           el.className = 'entity';
           var str = [];
@@ -164,8 +164,10 @@
             tag.innerText = entity.tag.ext.toString();
             el.appendChild(tag);
           }
-          while (i + 1 < entities.length && entities[i + 1].st == entity.st && entities[i + 1].en == entity.en) {
-            var next = entities[i + 1];
+          while (i + 1 < entities.list.length &&
+                 entities.list[i + 1].st == entity.st &&
+                 entities.list[i + 1].en == entity.en) {
+            var next = entities.list[i + 1];
             var same = true;
             for (var j = 0; j < entity.parses.length; j++) {
               if (entity.parses[j] + '' != next.parses[j] + '') {
