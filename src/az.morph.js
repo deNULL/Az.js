@@ -1164,5 +1164,6 @@
     });
   }
 
+  Morph.Tag = Tag;
   return Morph;
 }));

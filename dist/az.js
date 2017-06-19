@@ -104,9 +104,9 @@
 
   // Based on all common ЙЦУКЕН-keyboards (both Windows and Apple variations)
   var COMMON_TYPOS = {
-    'й': 'ёцыф', 'ц': 'йфыву', 'у': 'цывак', 'к': 'увапе', 'е': 'капрн', 'н': 'епрог', 'г': 'нролш', 'ш': 'голдщ', 'щ': 'шлджз', 'з': 'щджэх-', 'х': 'зжэъ-', 'ъ': 'хэ-ё',
-    'ф': 'йцычяё', 'ы': 'йцувсчяф', 'в': 'цукамсчы', 'а': 'укепимсв', 'п': 'кенртима', 'р': 'енгоьтип', 'о': 'нгшлбьтр', 'л': 'гшщдюбьо', 'д': 'шщзжюбл', 'ж': 'щзхэюд', 'э': 'зхъжё',
-    'ё': 'йфяъэ', 'я': 'ёфыч', 'ч': 'яфывс', 'с': 'чывам', 'м': 'свапи', 'и': 'мапрт', 'т': 'ипроь', 'ь': 'тролб', 'б': 'ьолдю', 'ю': 'блдж',
+    'й': 'иёцыф', 'ц': 'йфыву', 'у': 'цывак', 'к': 'увапе', 'е': 'эикапрн', 'н': 'епрог', 'г': 'нролш', 'ш': 'жголдщ', 'щ': 'шлджз', 'з': 'щджэх-', 'х': 'зжэъ-', 'ъ': 'ьхэ-ё',
+    'ф': 'йцычяё', 'ы': 'иойцувсчяф', 'в': 'фцукамсчы', 'а': 'оукепимсв', 'п': 'кенртима', 'р': 'енгоьтип', 'о': 'ангшлбьтр', 'л': 'гшщдюбьо', 'д': 'шщзжюбл', 'ж': 'шщзхэюд', 'э': 'езхъжё',
+    'ё': 'йфяъэ', 'я': 'еёфыч', 'ч': 'яфывс', 'с': 'зчывам', 'м': 'свапи', 'и': 'йяемапрт', 'т': 'дипроь', 'ь': 'ътролб', 'б': 'ьолдю', 'ю': 'блдж',
     '1': 'ёйц', '2': 'йцу', '3': 'цук', '4': 'уке', '5': 'кен', '6': 'енг', '7': 'нгш', '8': 'гшщ', '9': 'шщз', '0': 'щзх-', '-': 'зхъ', '=': '-хъ', '\\': 'ъэ', '.': 'южэ'
   };
 
@@ -287,7 +287,7 @@
 
       // Done
       if (len == str.length) {
-        if (typos < mtypos && !stutter) {
+        if (typos < mtypos && stutter <= mstutter) {
           // Allow missing letter(s) at the very end
           var label = this.guide[index << 1]; // First child
           do {
@@ -328,7 +328,7 @@
       }
 
       // Follow typos path (if not over limit)
-      if (typos < mtypos && !stutter) {
+      if (typos < mtypos && stutter <= mstutter) {
         // Skip a letter entirely (extra letter)
         prefixes.push([ prefix, len + 1, typos + 1, stutter, index ]);
 
@@ -386,7 +386,7 @@
         if (cur != MISSING) {
           prefixes.push([ prefix + str[len], len + 1, typos, stutter, cur ]);
 
-          while (stutter < mstutter && !typos && len < str.length - 1) {
+          while (stutter < mstutter && typos <= mtypos && len < str.length - 1) {
             // Follow a simple stutter path (merge two equal letters into one)
             if (str[len] == str[len + 1]) {
               prefixes.push([ prefix + str[len], len + 2, typos, stutter + 1, cur ]);
@@ -409,6 +409,7 @@
 
   return DAWG;
 }));
+
 ;(function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Morph = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.Morph', ['Az', 'Az.DAWG'], factory) :
@@ -549,7 +550,11 @@
    * @returns {boolean} Является ли текущий тег согласованным с указанным.
    */
   // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
-  Tag.prototype.matches = function(tag, grammemes) {
+  Tag.prototype.matches = function(tag, grammemes, ignoreMissing) {
+    if (ignoreMissing === undefined && typeof grammemes == 'boolean') {
+      ignoreMissing = grammemes;
+      grammemes = false;
+    }
     if (!grammemes) {
       if (Object.prototype.toString.call(tag) === '[object Array]') {
         for (var i = 0; i < tag.length; i++) {
@@ -562,11 +567,18 @@
       // Match to map
       for (var k in tag) {
         if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
-          if (!tag[k].indexOf(this[k])) {
+          var found = false;
+          for (var i = 0; i < tag[k].length; i++) {
+            if (tag[k][i] == this[k]) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
             return false;
           }
         } else {
-          if (tag[k] != this[k]) {
+          if (tag[k] != this[k] && (tag[k] !== false || this[k] !== undefined)) {
             return false;
           }
         }
@@ -574,15 +586,16 @@
       return true;
     }
 
-    if (tag instanceof Parse) {
+    if (!(tag instanceof Tag) && ('tag' in tag)) {
       tag = tag.tag;
     }
 
     // Match to another tag
     for (var i = 0; i < grammemes.length; i++) {
       if (tag[grammemes[i]] != this[grammemes[i]]) {
-        // Special case: tag.CAse
-        return false;
+        if (!ignoreMissing || ((grammemes[i] in tag) && (grammemes[i] in this))) {
+          return false;
+        }
       }
     }
     return true;
@@ -839,8 +852,8 @@
    * @returns {boolean} Является ли текущая форма слова согласованной с указанной.
    * @see Tag.matches
    */
-  Parse.prototype.matches = function(tag, grammemes) {
-    return this.tag.matches(tag, grammemes);
+  Parse.prototype.matches = function(tag, grammemes, ignoreMissing) {
+    return this.tag.matches(tag, grammemes, ignoreMissing);
   }
 
   /**
@@ -874,11 +887,7 @@
   }
 
   function getDictionaryScore(stutterCnt, typosCnt) {
-    // = 1.0 if no stutter/typos
-    // = 0.3 if any number of stutter or 1 typo
-    // = 0.09 if 2 typos
-    // = 0.027 if 3 typos
-    return Math.pow(0.3, Math.min(stutterCnt, 1) + typosCnt);
+    return Math.pow(0.3, typosCnt) * Math.pow(0.6, Math.min(stutterCnt, 1));
   }
 
   var DictionaryParse = function(word, paradigmIdx, formIdx, stutterCnt, typosCnt, prefix, suffix) {
@@ -1282,7 +1291,6 @@
       return parses;
     }
 
-
     Morph.Parsers.PrefixKnown = function(word, config) {
       var isCapitalized =
         !config.ignoreCase && word.length &&
@@ -1513,6 +1521,7 @@
           externalFull: json[i][3]
         }
       }
+      Morph.grammemes = grammemes;
       loaded();
     });
 
@@ -1552,7 +1561,7 @@
         callback(err);
         return;
       }
-      
+
       var list = new Uint16Array(data),
           count = list[0],
           pos = 1;
@@ -1567,6 +1576,7 @@
     });
   }
 
+  Morph.Tag = Tag;
   return Morph;
 }));
 
@@ -1575,18 +1585,633 @@
   typeof define === 'function' && define.amd ? define('Az.Syntax', ['Az'], factory) :
   (global.Az = global.Az || {}) && (global.Az.Syntax = factory(global.Az))
 }(this, function (Az) { 'use strict';
+  var initialized, preps;
   // TBD: Syntax analyzer
+  var SyntaxGroup = function(st, en, tokens, parses, tag, score) {
+    this.st = st;
+    this.en = en;
+    this.tokens = tokens;
+    this.parses = parses;
+    this.tag = tag;
+    this.score = score;
+  }
+
+  SyntaxGroup.fromParse = function(index, token, parse) {
+    return new SyntaxGroup(index, index, [token], [parse], parse.tag, parse.score);
+  }
+
+  SyntaxGroup.fromGroups = function() {
+    var base = arguments[0].clone();
+    for (var i = 1; i < arguments.length; i++) {
+      base.append(arguments[i]);
+    }
+    return base;
+  }
+
+  SyntaxGroup.prototype.clone = function() {
+    // TODO: do smth about extra attrs
+    return new SyntaxGroup(this.st, this.en, this.tokens.slice(0), this.parses.slice(0), this.tag, this.score);
+  }
+
+  SyntaxGroup.prototype.prepend = function(token, parse) {
+    if (token instanceof SyntaxGroup) {
+      this.prepend(token.tokens, token.parses);
+    } else
+    if (token instanceof Array) {
+      this.st -= token.length;
+      this.tokens = token.concat(this.tokens);
+      this.parses = parse.concat(this.parses);
+    } else {
+      this.st--;
+      this.tokens.unshift(token);
+      this.parses.unshift(parse);
+    }
+  }
+
+  SyntaxGroup.prototype.shift = function() {
+    this.st++;
+    this.tokens.shift();
+    this.parses.shift();
+  }
+
+  SyntaxGroup.prototype.append = function(token, parse) {
+    if (token instanceof SyntaxGroup) {
+      this.append(token.tokens, token.parses);
+    } else
+    if (token instanceof Array) {
+      this.en += token.length;
+      this.tokens = this.tokens.concat(token);
+      this.parses = this.parses.concat(parse);
+    } else {
+      this.en++;
+      this.tokens.push(token);
+      this.parses.push(parse);
+    }
+  }
+
+  SyntaxGroup.prototype.pop = function() {
+    this.en--;
+    this.tokens.pop();
+    this.parses.pop();
+  }
+
   var Syntax = function() {
 
   }
 
+  Syntax.parse = function(tokens, config) {
+
+    function checkQuotes(group) {
+      if (group.before || group.after || group.st == 0 || group.en == parses.length - 1) {
+        return group;
+      }
+
+      var before = tokens[group.st - 1];
+      var after = tokens[group.en + 1];
+      // Easy stuff
+      if ((before == '«' && after == '»') ||
+          /*(before == '(' && after == ')') ||*/ // Groups in brackets should be isolated from other groups
+          (before == '[' && after == ']')) {
+        group.prepend(before, parses[group.st - 1][0]);
+        group.append(after, parses[group.en + 1][0]);
+        group.before = before;
+        group.after = after;
+      }
+
+      return group;
+    }
+
+    function buildNames(nouns) {
+      var NMs = [];
+      for (var i = 0; i < nouns.length; i++) {
+        var name = nouns[i];
+        if (name.tag.Name) {
+          var nm = name.clone();
+          nm.type = 'NP';
+          nm.dets = [];
+          nm.noun = name;
+          nm.name = name;
+
+          for (var j = 0; j < nouns.length; j++) {
+            if ((nouns[j].tag.Surn || nouns[j].tag.Patr || nouns[j].tag.Abbr) && nouns[j].st == nm.en + 1) {
+              if (!nm.tag.matches(nouns[j], ['NMbr', 'CAse', 'GNdr'], true)) {
+                continue;
+              }
+              nm.append(nouns[j]);
+              if (nouns[j].tag.Surn) {
+                nm.surname = nouns[j];
+              } else {
+                nm.patronymic = nouns[j];
+              }
+              break;
+            }
+          }
+          if (nm.patronymic) {
+            for (var j = 0; j < nouns.length; j++) {
+              if (nouns[j].tag.Surn && nouns[j].st == nm.patronymic.en + 1) {
+                if (!nm.tag.matches(nouns[j], ['NMbr', 'CAse', 'GNdr'], true)) {
+                  continue;
+                }
+                nm.append(nouns[j]);
+                nm.surname = nouns[j];
+                break;
+              }
+            }
+          }
+          if (!nm.surname) {
+            for (var j = 0; j < nouns.length; j++) {
+              if (nouns[j].tag.Surn && nouns[j].en == nm.st - 1) {
+                if (!nm.tag.matches(nouns[j], ['NMbr', 'CAse', 'GNdr'], true)) {
+                  continue;
+                }
+                nm.append(nouns[j]);
+                nm.surname = nouns[j];
+                break;
+              }
+            }
+          }
+
+          NMs.push(checkQuotes(nm));
+        } else
+        if (name.tag.Surn) {
+          var nm = name.clone();
+          nm.type = 'NP';
+          nm.dets = [];
+          nm.noun = name;
+          nm.surname = name;
+          NMs.push(checkQuotes(nm));
+        }
+      }
+      return NMs;
+    }
+
+    // ADJ + ADJ + ... + NOUN = NOUN PHRASE
+    function buildNounPhrases(nouns) {
+      var NPs = [];
+      for (var i = 0; i < nouns.length; i++) {
+        var noun = nouns[i];
+        var np = noun.clone();
+        var lastAnd = false;
+        np.type = 'NP';
+        np.dets = [];
+        np.noun = noun;
+
+        for (var j = 1; j < 3 && noun.st - j >= 0; j++) {
+          var found = false;
+          for (var k = 0; k < parses[noun.st - j].length; k++) {
+            var adj = parses[noun.st - j][k];
+            if (adj.matches({ POS: ['ADJF', 'PRTF'] }) &&
+                adj.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true)) {
+              found = true;
+              lastAnd = false;
+              np.prepend(tokens[noun.st - j], adj);
+              np.dets.unshift(adj);
+              break;
+            } else
+            if ((j == 2) && (tokens[noun.st - j].toLowerCase() == 'и')) {
+              found = true;
+              lastAnd = true;
+              np.prepend(tokens[noun.st - j], adj);
+              break;
+            }
+          }
+          if (!found) {
+            break;
+          }
+        }
+        if (lastAnd) {
+          np.shift();
+        }
+        if (noun.st - j >= 0) {
+          for (var k = 0; k < parses[noun.st - j].length; k++) {
+            var num = parses[noun.st - j][k];
+            if (num.matches({ POS: ['NUMB', 'NUMR'] })) {
+              np.prepend(tokens[noun.st - j], num);
+              np.num = num;
+              break;
+            }
+          }
+        }
+        NPs.push(checkQuotes(np));
+      }
+      return NPs;
+    }
+
+    // NP + NP = NP
+    function buildPosessives(NPs) {
+      var POSSs = [];
+      for (var i = 0; i < NPs.length; i++) {
+        var dep = NPs[i];
+        if (dep.st == 0 || !dep.tag.matches({ CAse: 'gent' })) {
+          continue;
+        }
+        for (var k = 0; k < NPs.length; k++) {
+          var np = NPs[k];
+          if (np.en == dep.st - 1) {
+            var poss = SyntaxGroup.fromGroups(np, dep);
+            poss.type = 'NP';
+            poss.np = np;
+            poss.dep = dep;
+            POSSs.push(checkQuotes(poss));
+          }
+        }
+      }
+      return POSSs;
+    }
+
+    // PREP + NOUN/NP = PREP PHRASE
+    function buildPrepPhrases(NPs) {
+      var PPs = [];
+      for (var i = 0; i < NPs.length; i++) {
+        var np = NPs[i];
+        if (np.st == 0) {
+          continue;
+        }
+        var str = tokens[np.st - 1].toLowerCase();
+        if (!(str in preps)) {
+          continue;
+        }
+
+        var pp = np.clone();
+        pp.type = 'PP';
+        pp.np = np;
+        for (var k = 0; k < parses[np.st - 1].length; k++) {
+          var prep = parses[np.st - 1][k];
+          if (prep.tag.PREP && np.tag.matches({ CAse: preps[str] })) {
+            pp.prepend(tokens[np.st - 1], prep);
+            pp.prep = prep;
+
+            PPs.push(checkQuotes(pp));
+            break;
+          }
+        }
+      }
+      return PPs;
+    }
+
+    // NP + PP = NP
+    // PRTF + PP = PRTF
+    function buildNounPrepPhrases(NPs, PPs) {
+      var NPs2 = [];
+      for (var i = 0; i < PPs.length; i++) {
+        var dep = PPs[i];
+        if (dep.st == 0) {
+          continue;
+        }
+        for (var k = 0; k < NPs.length; k++) {
+          var np = NPs[k];
+          if (np.en == dep.st - 1) {
+            var np2 = SyntaxGroup.fromGroups(np, dep);
+            np2.type = np.type;
+            np2.np = np;
+            np2.dep = dep;
+            NPs2.push(checkQuotes(np2));
+          }
+        }
+      }
+      return NPs2;
+    }
+
+    // PRTF + NOUN/NPRE
+    function buildPrtfNounPhrases(PRTFs) {
+      var NPs = [];
+      for (var i = 0; i < PRTFs.length; i++) {
+        var det = PRTFs[i];
+        if (det.en + 1 >= parses.length - 1) {
+          continue;
+        }
+
+        for (var k = 0; k < parses[det.en + 1].length; k++) {
+          var noun = parses[det.en + 1][k];
+          if (noun.tag.matches({ POS: ['NOUN', 'NPRO'] }) &&
+              det.tag.matches(noun.tag, ['NMbr', 'GNdr', 'CAse', 'ANim'], true)) {
+            var np = det.clone();
+            np.type = 'NP';
+            np.append(tokens[det.en + 1], noun);
+            np.tag = noun.tag;
+            np.noun = noun;
+            np.dets = [det];
+            NPs.push(checkQuotes(np));
+          }
+        }
+      }
+      return NPs;
+    }
+
+    function buildVerbPredicates(VERBs, NPPPs) {
+      var VPs = [];
+      var ends = {};
+      var starts = {};
+      for (var i = 0; i < NPPPs.length; i++) {
+        if (!(NPPPs[i].st in starts)) {
+          starts[NPPPs[i].st] = [];
+        }
+        starts[NPPPs[i].st].push(NPPPs[i]);
+        if (!(NPPPs[i].en in ends)) {
+          ends[NPPPs[i].en] = [];
+        }
+        ends[NPPPs[i].en].push(NPPPs[i]);
+      }
+
+      for (var i = 0; i < VERBs.length; i++) {
+        var verb = VERBs[i];
+        var vp = VERBs[i].clone();
+        vp.type = 'VP';
+        vp.verb = verb;
+        vp.pp = [];
+
+        var st = verb.st - 1;
+        while (ends[st]) {
+          var found = false;
+          for (var j = 0; j < ends[st].length; j++) {
+            var group = ends[st][j];
+            if (group.tag.ADVB) {
+              if (vp.advb) {
+                continue;
+              }
+            } else
+            if (group.tag.PRCL) {
+              if (['не', 'якобы'].indexOf(group.tokens[0].toLowerCase()) == -1) {
+                continue;
+              }
+            } else
+            if (group.tag.INFN) {
+              continue;
+            } else
+            if (group.type == 'NP') {
+              if (group.tag.nomn && verb.tag.indc) { // Possibly an object
+                if (vp.object) {
+                  continue;
+                }
+                if (verb.tag.PErs && verb.tag.PErs != '3per') {
+                  if (group.tag.PErs != verb.tag.PErs) {
+                    continue;
+                  }
+                } else {
+                  if (group.tag.PErs && group.tag.PErs != '3per') {
+                    continue;
+                  }
+                }
+                if (!group.tag.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
+                  continue;
+                }
+              } else
+              if (group.tag.accs && verb.tag.tran) { // Possibly an subject
+                if (vp.subject) {
+                  continue;
+                }
+              } else
+              if (group.tag.gent || group.tag.datv || group.tag.ablt) {
+                if (vp[group.tag.CAse]) {
+                  continue;
+                }
+              } else {
+                continue;
+              }
+            }
+            if (!found || found.st > group.st) {
+              found = group;
+            }
+          }
+          if (!found) {
+            break;
+          }
+
+          vp.prepend(found);
+          if (found.tag.ADVB) {
+            vp.advb = found;
+          } else
+          if (found.tag.PRCL) { // не
+            if (found.tokens[0].toLowerCase() == 'не') {
+              vp.negate = !vp.negate;
+            }
+          } else
+          if (found.type == 'NP') {
+            if (found.tag.nomn) {
+              vp.object = found;
+            } else
+            if (found.tag.accs) {
+              vp.subject = found;
+            } else {
+              vp[found.tag.CAse] = found;
+            }
+          } else {
+            vp.pp.push(found);
+          }
+          st = found.st - 1;
+        }
+
+
+        var en = verb.en + 1;
+        while (starts[en]) {
+          var found = false;
+          for (var j = 0; j < starts[en].length; j++) {
+            var group = starts[en][j];
+            if (group.tag.ADVB) {
+              if (vp.advb) {
+                continue;
+              }
+            } else
+            if (group.tag.PRCL) {
+              continue;
+            } else
+            if (group.tag.INFN) {
+              if (vp.modal) {
+                continue;
+              }
+            } else
+            if (group.type == 'NP') {
+              if (group.tag.nomn && verb.tag.indc) { // Possibly an object
+                if (vp.object) {
+                  continue;
+                }
+                if (verb.tag.PErs && verb.tag.PErs != '3per') {
+                  if (group.tag.PErs != verb.tag.PErs) {
+                    continue;
+                  }
+                } else {
+                  if (group.tag.PErs && group.tag.PErs != '3per') {
+                    continue;
+                  }
+                }
+                if (!group.tag.matches(verb.tag, ['GNdr', 'NMbr'], true)) {
+                  continue;
+                }
+              } else
+              if (group.tag.accs && verb.tag.tran) { // Possibly an subject
+                if (vp.subject) {
+                  continue;
+                }
+              } else
+              if (group.tag.gent || group.tag.datv || group.tag.ablt) {
+                if (vp[group.tag.CAse]) {
+                  continue;
+                }
+              } else {
+                continue;
+              }
+            }
+            if (!found || found.en < group.en) {
+              found = group;
+            }
+          }
+          if (!found) {
+            break;
+          }
+
+          vp.append(found);
+          if (found.tag.ADVB) {
+            vp.advb = found;
+          } else
+          if (found.tag.INFN) {
+            vp.modal = vp.verb;
+            vp.verb = found;
+          } else
+          if (found.type == 'NP') {
+            if (found.tag.nomn) {
+              vp.object = found;
+            } else
+            if (found.tag.accs) {
+              vp.subject = found;
+            } else {
+              vp[found.tag.CAse] = found;
+            }
+          } else {
+            vp.pp.push(found);
+          }
+          en = found.en + 1;
+        }
+
+        VPs.push(checkQuotes(vp));
+      }
+
+      return VPs;
+    }
+
+    // Syntax.parse STARTS HERE
+
+    //config = config ? Az.extend(this.config, config) : this.config;
+    tokens = (typeof tokens == 'string') ? Az.Tokens(tokens).done(['SPACE'], true) : tokens;
+    var res = {
+      tokens: tokens,
+      parses: []
+    };
+
+    var genericNoun = new Az.Morph.Tag('NOUN,Fixd,Name,Surn,Geox,Orgn ');
+    genericNoun.ext = new Az.Morph.Tag('СУЩ,0,имя,фам,гео,орг ');
+
+    var parses = [];
+    for (var i = 0; i < tokens.length; i++) {
+      parses.push(Az.Morph(tokens[i].toString(), config));
+    }
+    var groups = [];
+    for (var i = 0; i < tokens.length; i++) {
+      var filtered = [];
+      for (var j = 0; j < parses[i].length; j++) {
+        var parse = parses[i][j];
+        var tag = parse.tag;
+        if (tag && tag.POS) {
+          if (tag.LATN) {
+            // TODO: make this better
+            parse.tag = genericNoun;
+          }
+          var group = SyntaxGroup.fromParse(i, tokens[i], parse);
+
+          if (tag.Abbr) {
+            if (i == tokens.length - 1 || tokens[i + 1].toString()[0] != '.') {
+              continue;
+            } else {
+              group.append(tokens[i + 1], parses[i + 1][0]);
+            }
+          }
+
+          groups.push(group);
+        }
+        filtered.push(parse);
+      }
+      res.parses.push(filtered);
+    }
+    parses = res.parses;
+
+    for (var i = 0; i < groups.length; i++) {
+      var tag = groups[i].tag;
+      if (!(tag.POS in res)) {
+        res[tag.POS] = [];
+      }
+      res[tag.POS].push(checkQuotes(groups[i]));
+    }
+
+    // For now, apply just simplest rules
+
+    // TODO: LATN -> NOUN
+    // TODO: Names
+    res.NP = res.NM = buildNames((res.NOUN || []).concat(res.NPRO || []));
+    // TODO: Dates
+    // TODO: Numbers
+
+    res.NP = res.NP.concat(buildNounPhrases((res.NOUN || []).concat(res.NPRO || [])));
+
+    var NP = buildPosessives(res.NP);
+    res.NP = res.NP.concat(NP, buildPosessives(NP));
+
+    res.PP = buildPrepPhrases(res.NP);
+
+    NP = buildNounPrepPhrases(res.NP, res.PP);
+    res.NP = res.NP.concat(NP);
+
+    var PP = buildPrepPhrases(NP);
+    NP = buildNounPrepPhrases(res.NP, PP);
+    res.NP = res.NP.concat(NP);
+
+    var PRTF = buildNounPrepPhrases(res.PRTF || [], res.PP);
+    res.PRTF = (res.PRTF || []).concat(PRTF);
+    res.NP = res.NP.concat(buildPrtfNounPhrases(PRTF));
+
+    res.VP = buildVerbPredicates(
+      res.VERB || [],
+      res.NP.concat(res.PP, res.INFN || [], res.PRCL || [], res.ADVB || []));
+
+    return res;
+  }
+
+  Syntax.init = function(path, callback) {
+    var loading = 0;
+    function loaded() {
+      if (!--loading) {
+
+        initialized = true;
+        callback && callback(null, Syntax);
+      }
+    }
+
+    if (!callback && typeof path == 'function') {
+      callback = path;
+      if (typeof __dirname == 'string') {
+        path = __dirname + '/../dicts';
+      } else {
+        path = 'dicts';
+      }
+    }
+
+    loading++;
+    Az.load(path + '/preps.json', 'json', function(err, json) {
+      if (err) {
+        callback(err);
+        return;
+      }
+      preps = json;
+      loaded();
+    });
+  }
+
   return Syntax;
 }));
+
 ;(function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Tokens = factory()) :
+  typeof exports === 'object' && typeof module !== 'undefined' ? (module.exports = module.exports || {}) && (module.exports.Tokens = factory(module.exports)) :
   typeof define === 'function' && define.amd ? define('Az.Tokens', ['Az'], factory) :
-  (global.Az = global.Az || {}) && (global.Az.Tokens = factory())
-}(this, function () { 'use strict';
+  (global.Az = global.Az || {}) && (global.Az.Tokens = factory(global.Az))
+}(this, function (Az) { 'use strict';
   /** @namespace Az **/
   var TLDs = 'ac|ad|ae|aero|af|ag|ai|al|am|ao|aq|ar|arpa|as|asia|at|au|aw|ax|az|ba|bb|be|bf|bg|bh|bi|biz|bj|bm|bo|br|bs|bt|bv|bw|by|bz|ca|cat|cc|cd|cf|cg|ch|ci|cl|cm|cn|co|com|coop|cr|cu|cv|cw|cx|cz|de|dj|dk|dm|do|dz|ec|edu|ee|eg|es|et|eu|fi|fm|fo|fr|ga|gb|gd|ge|gf|gg|gh|gi|gl|gm|gn|gov|gp|gq|gr|gs|gt|gw|gy|hk|hm|hn|hr|ht|hu|id|ie|il|im|in|info|int|io|iq|ir|is|it|je|jo|jobs|jp|kg|ki|km|kn|kp|kr|ky|kz|la|lb|lc|li|lk|lr|ls|lt|lu|lv|ly|ma|mc|md|me|mg|mh|mil|mk|ml|mn|mo|mobi|mp|mq|mr|ms|mt|mu|museum|mv|mw|mx|my|na|name|nc|ne|net|nf|ng|nl|no|nr|nu|nz|om|org|pa|pe|pf|ph|pk|pl|pm|pn|post|pr|pro|ps|pt|pw|py|qa|re|ro|rs|ru|rw|sa|sb|sc|sd|se|sg|sh|si|sj|sk|sl|sm|sn|so|sr|st|su|sv|sx|sy|sz|tc|td|tel|tf|tg|th|tj|tk|tl|tm|tn|to|tr|travel|tt|tv|tw|tz|ua|ug|uk|us|uy|uz|va|vc|ve|vg|vi|vn|vu|wf|ws|yt|امارات|հայ|বাংলা|бел|中国|中國|الجزائر|مصر|ею|გე|ελ|香港|भारत|بھارت|భారత్|ભારત|ਭਾਰਤ|ভারত|இந்தியா|ایران|ايران|عراق|الاردن|한국|қаз|ලංකා|இலங்கை|المغرب|мкд|мон|澳門|澳门|مليسيا|عمان|پاکستان|پاكستان|فلسطين|срб|рф|قطر|السعودية|السعودیة|السعودیۃ|السعوديه|سودان|新加坡|சிங்கப்பூர்|سورية|سوريا|ไทย|تونس|台灣|台湾|臺灣|укр|اليمن|xxx|zm|aaa|aarp|abarth|abb|abbott|abbvie|abc|able|abogado|abudhabi|academy|accenture|accountant|accountants|aco|active|actor|adac|ads|adult|aeg|aetna|afamilycompany|afl|africa|africamagic|agakhan|agency|aig|aigo|airbus|airforce|airtel|akdn|alfaromeo|alibaba|alipay|allfinanz|allstate|ally|alsace|alstom|americanexpress|americanfamily|amex|amfam|amica|amsterdam|analytics|android|anquan|anz|aol|apartments|app|apple|aquarelle|arab|aramco|archi|army|art|arte|asda|associates|athleta|attorney|auction|audi|audible|audio|auspost|author|auto|autos|avianca|aws|axa|azure|baby|baidu|banamex|bananarepublic|band|bank|bar|barcelona|barclaycard|barclays|barefoot|bargains|baseball|basketball|bauhaus|bayern|bbc|bbt|bbva|bcg|bcn|beats|beauty|beer|bentley|berlin|best|bestbuy|bet|bharti|bible|bid|bike|bing|bingo|bio|black|blackfriday|blanco|blockbuster|blog|bloomberg|blue|bms|bmw|bnl|bnpparibas|boats|boehringer|bofa|bom|bond|boo|book|booking|boots|bosch|bostik|boston|bot|boutique|box|bradesco|bridgestone|broadway|broker|brother|brussels|budapest|bugatti|build|builders|business|buy|buzz|bzh|cab|cafe|cal|call|calvinklein|camera|camp|cancerresearch|canon|capetown|capital|capitalone|car|caravan|cards|care|career|careers|cars|cartier|casa|case|caseih|cash|casino|catering|catholic|cba|cbn|cbre|cbs|ceb|center|ceo|cern|cfa|cfd|chanel|channel|chase|chat|cheap|chintai|chloe|christmas|chrome|chrysler|church|cipriani|circle|cisco|citadel|citi|citic|city|cityeats|claims|cleaning|click|clinic|clinique|clothing|cloud|club|clubmed|coach|codes|coffee|college|cologne|comcast|commbank|community|company|compare|computer|comsec|condos|construction|consulting|contact|contractors|cooking|cookingchannel|cool|corsica|country|coupon|coupons|courses|credit|creditcard|creditunion|cricket|crown|crs|cruise|cruises|csc|cuisinella|cymru|cyou|dabur|dad|dance|date|dating|datsun|day|dclk|dds|deal|dealer|deals|degree|delivery|dell|deloitte|delta|democrat|dental|dentist|desi|design|dev|dhl|diamonds|diet|digital|direct|directory|discount|discover|dish|diy|dnp|docs|dodge|dog|doha|domains|dot|download|drive|dstv|dtv|dubai|duck|dunlop|duns|dupont|durban|dvag|dwg|earth|eat|edeka|education|email|emerck|emerson|energy|engineer|engineering|enterprises|epost|epson|equipment|ericsson|erni|esq|estate|esurance|etisalat|eurovision|eus|events|everbank|exchange|expert|exposed|express|extraspace|fage|fail|fairwinds|faith|family|fan|fans|farm|farmers|fashion|fast|fedex|feedback|ferrari|ferrero|fiat|fidelity|fido|film|final|finance|financial|fire|firestone|firmdale|fish|fishing|fit|fitness|flickr|flights|flir|florist|flowers|flsmidth|fly|foo|foodnetwork|football|ford|forex|forsale|forum|foundation|fox|free|fresenius|frl|frogans|frontdoor|frontier|ftr|fujitsu|fujixerox|fun|fund|furniture|futbol|fyi|gal|gallery|gallo|gallup|game|games|gap|garden|gbiz|gdn|gea|gent|genting|george|ggee|gift|gifts|gives|giving|glade|glass|gle|global|globo|gmail|gmbh|gmo|gmx|godaddy|gold|goldpoint|golf|goo|goodhands|goodyear|goog|google|gop|got|gotv|grainger|graphics|gratis|green|gripe|group|guardian|gucci|guge|guide|guitars|guru|hair|hamburg|hangout|haus|hbo|hdfc|hdfcbank|health|healthcare|help|helsinki|here|hermes|hgtv|hiphop|hisamitsu|hitachi|hiv|hkt|hockey|holdings|holiday|homedepot|homegoods|homes|homesense|honda|honeywell|horse|host|hosting|hot|hoteles|hotmail|house|how|hsbc|htc|hughes|hyatt|hyundai|ibm|icbc|ice|icu|ieee|ifm|iinet|ikano|imamat|imdb|immo|immobilien|industries|infiniti|ing|ink|institute|insurance|insure|intel|international|intuit|investments|ipiranga|irish|iselect|ismaili|ist|istanbul|itau|itv|iveco|iwc|jaguar|java|jcb|jcp|jeep|jetzt|jewelry|jio|jlc|jll|jmp|jnj|joburg|jot|joy|jpmorgan|jprs|juegos|juniper|kaufen|kddi|kerryhotels|kerrylogistics|kerryproperties|kfh|kia|kim|kinder|kindle|kitchen|kiwi|koeln|komatsu|kosher|kpmg|kpn|krd|kred|kuokgroup|kyknet|kyoto|lacaixa|ladbrokes|lamborghini|lamer|lancaster|lancia|lancome|land|landrover|lanxess|lasalle|lat|latino|latrobe|law|lawyer|lds|lease|leclerc|lefrak|legal|lego|lexus|lgbt|liaison|lidl|life|lifeinsurance|lifestyle|lighting|like|lilly|limited|limo|lincoln|linde|link|lipsy|live|living|lixil|loan|loans|locker|locus|loft|lol|london|lotte|lotto|love|lpl|lplfinancial|ltd|ltda|lundbeck|lupin|luxe|luxury|macys|madrid|maif|maison|makeup|man|management|mango|market|marketing|markets|marriott|marshalls|maserati|mattel|mba|mcd|mcdonalds|mckinsey|med|media|meet|melbourne|meme|memorial|men|menu|meo|metlife|miami|microsoft|mini|mint|mit|mitsubishi|mlb|mls|mma|mnet|mobily|moda|moe|moi|mom|monash|money|monster|montblanc|mopar|mormon|mortgage|moscow|moto|motorcycles|mov|movie|movistar|msd|mtn|mtpc|mtr|multichoice|mutual|mutuelle|mzansimagic|nab|nadex|nagoya|naspers|nationwide|natura|navy|nba|nec|netbank|netflix|network|neustar|new|newholland|news|next|nextdirect|nexus|nfl|ngo|nhk|nico|nike|nikon|ninja|nissan|nissay|nokia|northwesternmutual|norton|now|nowruz|nowtv|nra|nrw|ntt|nyc|obi|observer|off|office|okinawa|olayan|olayangroup|oldnavy|ollo|omega|one|ong|onl|online|onyourside|ooo|open|oracle|orange|organic|orientexpress|origins|osaka|otsuka|ott|ovh|page|pamperedchef|panasonic|panerai|paris|pars|partners|parts|party|passagens|pay|payu|pccw|pet|pfizer|pharmacy|philips|photo|photography|photos|physio|piaget|pics|pictet|pictures|pid|pin|ping|pink|pioneer|pizza|place|play|playstation|plumbing|plus|pnc|pohl|poker|politie|porn|pramerica|praxi|press|prime|prod|productions|prof|progressive|promo|properties|property|protection|pru|prudential|pub|pwc|qpon|quebec|quest|qvc|racing|raid|read|realestate|realtor|realty|recipes|red|redstone|redumbrella|rehab|reise|reisen|reit|reliance|ren|rent|rentals|repair|report|republican|rest|restaurant|review|reviews|rexroth|rich|richardli|ricoh|rightathome|ril|rio|rip|rmit|rocher|rocks|rodeo|rogers|room|rsvp|ruhr|run|rwe|ryukyu|saarland|safe|safety|sakura|sale|salon|samsclub|samsung|sandvik|sandvikcoromant|sanofi|sap|sapo|sarl|sas|save|saxo|sbi|sbs|sca|scb|schaeffler|schmidt|scholarships|school|schule|schwarz|science|scjohnson|scor|scot|seat|secure|security|seek|select|sener|services|ses|seven|sew|sex|sexy|sfr|shangrila|sharp|shaw|shell|shia|shiksha|shoes|shopping|shouji|show|showtime|shriram|silk|sina|singles|site|ski|skin|sky|skype|sling|smart|smile|sncf|soccer|social|softbank|software|sohu|solar|solutions|song|sony|soy|space|spiegel|spot|spreadbetting|srl|srt|stada|staples|star|starhub|statebank|statefarm|statoil|stc|stcgroup|stockholm|storage|store|stream|studio|study|style|sucks|supersport|supplies|supply|support|surf|surgery|suzuki|swatch|swiftcover|swiss|sydney|symantec|systems|tab|taipei|talk|taobao|target|tatamotors|tatar|tattoo|tax|taxi|tci|tdk|team|tech|technology|telecity|telefonica|temasek|tennis|teva|thd|theater|theatre|theguardian|tiaa|tickets|tienda|tiffany|tips|tires|tirol|tjmaxx|tjx|tkmaxx|tmall|today|tokyo|tools|top|toray|toshiba|total|tours|town|toyota|toys|trade|trading|training|travelchannel|travelers|travelersinsurance|trust|trv|tube|tui|tunes|tushu|tvs|ubank|ubs|uconnect|unicom|university|uno|uol|ups|vacations|vana|vanguard|vegas|ventures|verisign|versicherung|vet|viajes|video|vig|viking|villas|vin|vip|virgin|visa|vision|vista|vistaprint|viva|vivo|vlaanderen|vodka|volkswagen|volvo|vote|voting|voto|voyage|vuelos|wales|walmart|walter|wang|wanggou|warman|watch|watches|weather|weatherchannel|webcam|weber|website|wed|wedding|weibo|weir|whoswho|wien|wiki|williamhill|win|windows|wine|winners|wme|wolterskluwer|woodside|work|works|world|wow|wtc|wtf|xbox|xerox|xfinity|xihuan|xin|कॉम|セール|佛山|慈善|集团|在线|大众汽车|点看|คอม|八卦|موقع|一号店|公益|公司|香格里拉|网站|移动|我爱你|москва|католик|онлайн|сайт|联通|קום|时尚|微博|淡马锡|ファッション|орг|नेट|ストア|삼성|商标|商店|商城|дети|ポイント|新闻|工行|家電|كوم|中文网|中信|娱乐|谷歌|電訊盈科|购物|クラウド|通販|网店|संगठन|餐厅|网络|ком|诺基亚|食品|飞利浦|手表|手机|ارامكو|العليان|اتصالات|بازار|موبايلي|ابوظبي|كاثوليك|همراه|닷컴|政府|شبكة|بيتك|عرب|机构|组织机构|健康|рус|珠宝|大拿|みんな|グーグル|世界|書籍|网址|닷넷|コム|天主教|游戏|vermögensberater|vermögensberatung|企业|信息|嘉里大酒店|嘉里|广东|政务|xperia|xyz|yachts|yahoo|yamaxun|yandex|yodobashi|yoga|yokohama|you|youtube|yun|zappos|zara|zero|zip|zippo|zone|zuerich'.split('|');
   var defaults = {
@@ -1757,7 +2382,7 @@
 
     var offs = this.source.length;
     this.source += text;
-    
+
     var s = this.source, ts = this.tokens;
     for (var i = offs; i < s.length; i++) {
       var ch = s[i];
@@ -1770,9 +2395,9 @@
 
       if (config.html && (ch == ';')) {
         // &nbsp;
-        if ((last > 0) && 
-            (token.type === Tokens.WORD) && 
-            (ts[last - 1].length == 1) && 
+        if ((last > 0) &&
+            (token.type === Tokens.WORD) &&
+            (ts[last - 1].length == 1) &&
             (s[ts[last - 1].st] == '&')) {
           var name = token.toLowerCase();
           if (name in HTML_ENTITIES) {
@@ -1786,12 +2411,12 @@
         } else
         // &x123AF5;
         // &1234;
-        if ((last > 1) && 
-            ((token.type === Tokens.NUMBER) || 
+        if ((last > 1) &&
+            ((token.type === Tokens.NUMBER) ||
              ((token.type === Tokens.WORD) &&
-              (s[token.st] == 'x'))) && 
+              (s[token.st] == 'x'))) &&
             (ts[last - 1].length == 1) &&
-            (s[ts[last - 1].st] == '#') && 
+            (s[ts[last - 1].st] == '#') &&
             (ts[last - 1].length == 1) &&
             (s[ts[last - 1].st] == '&')) {
           if (s[token.st] == 'x') {
@@ -1852,8 +2477,8 @@
       }
 
       if (token) {
-        if (config.wiki && 
-            (ch != "'") && 
+        if (config.wiki &&
+            (ch != "'") &&
             (token.length == 1) &&
             (s[token.st] == "'") &&
             (last > 0) &&
@@ -1867,9 +2492,9 @@
         }
 
         // Preprocess last token
-        if (config.links && 
+        if (config.links &&
             config.links.tlds &&
-            ((charType === Tokens.PUNCT) || 
+            ((charType === Tokens.PUNCT) ||
              (charType === Tokens.SPACE)) &&
             (ts.length > 2) &&
             (ts[last - 2].type === Tokens.WORD) &&
@@ -1882,8 +2507,8 @@
           while ((last >= 2) &&
                  (ts[last - 2].type === Tokens.WORD) &&
                  (ts[last - 1].length == 1) &&
-                 ((s[ts[last - 1].st] == '.') || 
-                  (s[ts[last - 1].st] == '@') || 
+                 ((s[ts[last - 1].st] == '.') ||
+                  (s[ts[last - 1].st] == '@') ||
                   (s[ts[last - 1].st] == ':'))) {
             last -= 2;
             token = ts[last];
@@ -1891,8 +2516,8 @@
             token.allUpper = token.allUpper && ts[last + 1].allUpper && ts[last + 2].allUpper;
           }
 
-          if (config.emails && 
-              (token.indexOf('@') > -1) && 
+          if (config.emails &&
+              (token.indexOf('@') > -1) &&
               (token.indexOf(':') == -1)) {
             // URL can contain a '@' but in that case it should be in form http://user@site.com or user:pass@site.com
             // So if URL has a '@' but no ':' in it, we assume it's a email
@@ -1909,8 +2534,8 @@
 
         // Process next char (start new token or append to the previous one)
         if (token.type === Tokens.LINK) {
-          if ((ch == ')') && 
-              (last >= 1) && 
+          if ((ch == ')') &&
+              (last >= 1) &&
               (ts[last - 1].type === Tokens.MARKUP) &&
               (ts[last - 1].length == 1) &&
               (s[ts[last - 1].st] == '(')) {
@@ -1926,9 +2551,9 @@
           }
         } else
         if ((token.type === Tokens.HASHTAG) || (token.type === Tokens.MENTION)) {
-          if ((charType === Tokens.CYRIL) || 
-              (charType == Tokens.LATIN) || 
-              (charType == Tokens.DIGIT) || 
+          if ((charType === Tokens.CYRIL) ||
+              (charType == Tokens.LATIN) ||
+              (charType == Tokens.DIGIT) ||
               (ch == '_') || ((ch == '@') && (token.indexOf('@') == -1))) {
             append = true;
           }
@@ -1962,7 +2587,7 @@
               append = false;
               tokenType = Tokens.TAG;
               tokenSubType = Tokens.CLOSING;
-            } else 
+            } else
             if ((token.length >= 7) && (token.toString().substr(-7) == '</style')) {
               token.length -= 7;
               st -= 7;
@@ -1970,26 +2595,26 @@
               append = false;
               tokenType = Tokens.TAG;
               tokenSubType = Tokens.CLOSING;
-            } 
+            }
           }
         } else
-        if ((token.type === Tokens.TAG) && 
+        if ((token.type === Tokens.TAG) &&
             (token.type !== Tokens.CLOSING) &&
             (token.length >= 8) &&
             (token.toLowerCase().substr(1, 6) == 'script')) {
           tokenType = Tokens.CONTENT;
           tokenSubType = Tokens.SCRIPT;
         } else
-        if ((token.type === Tokens.TAG) && 
+        if ((token.type === Tokens.TAG) &&
             (token.type !== Tokens.CLOSING) &&
-            (token.length >= 7) && 
+            (token.length >= 7) &&
             (token.toLowerCase().substr(1, 5) == 'style')) {
           tokenType = Tokens.CONTENT;
           tokenSubType = Tokens.STYLE;
         } else
-        if (config.html && 
+        if (config.html &&
             (token.length == 1) &&
-            (s[token.st] == '<') && 
+            (s[token.st] == '<') &&
             ((charType === Tokens.LATIN) || (ch == '!') || (ch == '/'))) {
           append = true;
           token.type = Tokens.TAG;
@@ -2003,19 +2628,19 @@
         if (token.type === Tokens.CONTENT) {
           append = true;
         } else
-        if ((token.type === Tokens.MARKUP) && 
-            (token.subType == Tokens.TEMPLATE) && 
-            ((s[token.en()] != '}') || 
+        if ((token.type === Tokens.MARKUP) &&
+            (token.subType == Tokens.TEMPLATE) &&
+            ((s[token.en()] != '}') ||
              (s[token.en() - 1] != '}'))) {
           append = true;
         } else
-        if ((token.type === Tokens.MARKUP) && 
-            (token.type === Tokens.LINK) && 
+        if ((token.type === Tokens.MARKUP) &&
+            (token.type === Tokens.LINK) &&
             (s[token.en()] != ')')) {
           append = true;
         } else
-        if ((token.type === Tokens.MARKUP) && 
-            (s[token.st] == '`') && 
+        if ((token.type === Tokens.MARKUP) &&
+            (s[token.st] == '`') &&
             (token.subType === Tokens.NEWLINE) &&
             (charType === Tokens.LATIN)) {
           append = true;
@@ -2033,15 +2658,15 @@
             append = true;
             token.type = Tokens.HASHTAG;
           } else
-          if (config.mentions && 
-              (token.length == 1) && 
-              (s[token.st] == '@') && 
+          if (config.mentions &&
+              (token.length == 1) &&
+              (s[token.st] == '@') &&
               ((last == 0) || (ts[last - 1].type === Tokens.SPACE))) { // Mentions
             append = true;
             token.type = Tokens.MENTION;
           } else
-          if ((charType === Tokens.LATIN) && 
-              (token.length == 1) && 
+          if ((charType === Tokens.LATIN) &&
+              (token.length == 1) &&
               ((s[token.st] == "'") || (s[token.st] == '’'))) {
             append = true;
             token.type = Tokens.WORD;
@@ -2084,8 +2709,8 @@
             token.type = Tokens.NUMBER;
           } else
           if ((token.length == 1) &&
-              ((s[token.st] == ',') || (s[token.st] == '.')) && 
-              (ts.length > 1) && 
+              ((s[token.st] == ',') || (s[token.st] == '.')) &&
+              (ts.length > 1) &&
               (ts[last - 1].type === Tokens.NUMBER)) {
             append = true;
 
@@ -2100,14 +2725,14 @@
             append = true;
           }
         } else
-        if ((token.type === Tokens.MARKUP) && 
+        if ((token.type === Tokens.MARKUP) &&
             (s[token.st] == ch) &&
             ('=-~:*#`\'>_'.indexOf(ch) > -1)) {
           append = true;
         } else
         if (ch == '.') {
-          if (config.links && 
-              config.links.www && 
+          if (config.links &&
+              config.links.www &&
               (token.length == 3) &&
               (token.toLowerCase() == 'www')) { // Links without protocol but with www
             append = true;
@@ -2124,15 +2749,15 @@
             token.type = Tokens.MARKUP;
           }
         } else
-        if ((ch == '-') || 
-            ((token.subType == Tokens.LATIN) && 
+        if ((ch == '-') ||
+            ((token.subType == Tokens.LATIN) &&
              ((ch == '’') || (ch == "'")))) {
           if (token.type === Tokens.WORD) {
             append = true;
           }
         } else
         if (ch == '/') {
-          if (config.links && 
+          if (config.links &&
               config.links.protocols &&
               (ts.length > 2) &&
               (ts[last - 2].type === Tokens.WORD) &&
@@ -2152,8 +2777,8 @@
           }
         } else
         if (config.html && ch == ';') {
-          if ((last > 0) && 
-              (token.type === Tokens.WORD) && 
+          if ((last > 0) &&
+              (token.type === Tokens.WORD) &&
               (ts[last - 1].length == 1) &&
               (s[ts[last - 1].st] == '&')) {
             append = true;
@@ -2165,11 +2790,11 @@
 
             ts.length -= 1;
           } else
-          if ((last > 1) && 
-              ((token.type === Tokens.WORD) || 
-               (token.type === Tokens.NUMBER)) && 
+          if ((last > 1) &&
+              ((token.type === Tokens.WORD) ||
+               (token.type === Tokens.NUMBER)) &&
               (ts[last - 1].length == 1) &&
-              (s[ts[last - 1].st] == '#') && 
+              (s[ts[last - 1].st] == '#') &&
               (ts[last - 2].length == 1) &&
               (s[ts[last - 2].st] == '&')) {
             append = true;
@@ -2182,21 +2807,21 @@
             ts.length -= 2;
           }
         } else
-        if (config.markdown && 
-            (ch == '[') && 
+        if (config.markdown &&
+            (ch == '[') &&
             (token.length == 1) &&
             (s[token.st] == '!')) {
           append = true;
           token.type = Tokens.MARKUP;
         } else
-        if (config.markdown && 
+        if (config.markdown &&
             (ch == '(') &&
             (token.length == 1) &&
             (s[token.st] == ']')) {
           tokenType = Tokens.MARKUP;
           tokenSubType = Tokens.LINK;
         } else
-        if (config.wiki && 
+        if (config.wiki &&
             (ch == '{') &&
             (token.length == 1) &&
             (s[token.st] == '{')) {
@@ -2204,14 +2829,14 @@
           token.type = Tokens.MARKUP;
           token.subType = Tokens.TEMPLATE;
         } else
-        if (config.wiki && 
-            (ch == '[') && 
+        if (config.wiki &&
+            (ch == '[') &&
             (token.length == 1) &&
             (s[token.st] == '[')) {
           append = true;
         } else
-        if (config.wiki && 
-            (ch == ']') && 
+        if (config.wiki &&
+            (ch == ']') &&
             (token.length == 1) &&
             (s[token.st] == ']')) {
           append = true;
@@ -2219,14 +2844,14 @@
         if (config.wiki && (ch == '|') && !lineStart) {
           var found = -1;
           for (var j = last - 1; j >= 0; j--) {
-            if ((ts[j].length == 2) && 
-                (s[ts[j].st] == '[') && 
+            if ((ts[j].length == 2) &&
+                (s[ts[j].st] == '[') &&
                 (s[ts[j].st + 1] == '[')) {
               found = j;
               break;
             }
-            if (((ts[j].length == 1) && 
-                 (s[ts[j].st] == '|')) || 
+            if (((ts[j].length == 1) &&
+                 (s[ts[j].st] == '|')) ||
                 ts[j].indexOf('\n') > -1) {
               break;
             }
@@ -2343,6 +2968,33 @@
       }
     }
     return list;
+  }
+
+  /**
+   * Возвращает токен по его индексу.
+   *
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
+   * @returns {Token|False} Токен или false, если индекс вышел за пределы массива токенов.
+   */
+  Tokens.prototype.get = function(index, filter, exclude) {
+    if (index < 0) {
+      return false;
+    }
+    if (!filter) {
+      return this.tokens[index];
+    }
+    var matcher = getMatcher(filter, exclude);
+    var idx = 0;
+    for (var i = 0; i < this.tokens.length; i++) {
+      if (matcher(this.tokens[i], i, this.tokens)) {
+        if (idx == index) {
+          return this.tokens[i];
+        }
+        idx++;
+      }
+    }
+    return false;
   }
 
   /**
