@@ -113,10 +113,10 @@
       this.tokens = [];
       this.source = '';
       if (typeof text == 'string') {
-        this.config = config ? Az.extend(defaults, config) : defaults;
+        this.config = config ? Object.assign({}, defaults, config) : defaults;
         this.append(text);
       } else {
-        this.config = text ? Az.extend(defaults, text) : defaults;
+        this.config = text ? Object.assign({}, defaults, text) : defaults;
       }
       this.index = -1;
     } else {
