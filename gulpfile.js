@@ -10,6 +10,7 @@ var gulp = require('gulp'),
     fs = require('fs');
     ts = require("gulp-typescript");
     tsProject = ts.createProject("./tsconfig.json");
+    terser = require('gulp-terser');
 
 gulp.task('docs', function () {
   return merge(
@@ -35,10 +36,11 @@ gulp.task('docs', function () {
 
 gulp.task('default', function() {
   return tsProject.src(['src/az.ts', 'src/az.*.ts'])
+    .pipe(tsProject())
     .pipe(sourcemaps.init())
     .pipe(concat('az.js'))
     .pipe(gulp.dest('dist'))
-    .pipe(uglify())
+    .pipe(terser())
     .pipe(rename('az.min.js'))
     .pipe(sourcemaps.write('.', { includeContent: false, sourceRoot: '../src' }))
     .pipe(gulp.dest('dist'))

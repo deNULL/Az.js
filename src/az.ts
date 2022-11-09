@@ -1,17 +1,21 @@
-;(function (global, factory) {
+
+import { define } from "../types";
+
+;(function (global: any, factory: any) {
   typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
   typeof define === 'function' && define.amd ? define('Az', factory) :
   global.Az = factory()
 }(this, function () { 'use strict';
   /** @namespace Az **/
+  let fs: any;
   if (typeof require != 'undefined' && typeof exports === 'object' && typeof module !== 'undefined') {
-    var fs = require('fs');
+    fs = require('fs');
   }
 
-  var Az = {
-    load: function(url, responseType, callback) {
+  let Az = {
+    load: function(url: string, responseType: string, callback: any) {
       if (fs) {
-        fs.readFile(url, { encoding: responseType == 'json' ? 'utf8' : null }, function (err, data) {
+        fs.readFile(url, { encoding: responseType == 'json' ? 'utf8' : null }, function (err: any, data: any) {
           if (err) {
             callback(err);
             return;
@@ -24,9 +28,9 @@
             if (data.buffer) {
               callback(null, data.buffer);
             } else {
-              var ab = new ArrayBuffer(data.length);
-              var view = new Uint8Array(ab);
-              for (var i = 0; i < data.length; ++i) {
+              let ab = new ArrayBuffer(data.length);
+              let view = new Uint8Array(ab);
+              for (let i = 0; i < data.length; ++i) {
                   view[i] = data[i];
               }
               callback(null, ab);
@@ -38,11 +42,11 @@
         return;
       }
 
-      var xhr = new XMLHttpRequest();
+      let xhr: any = new XMLHttpRequest();
       xhr.open('GET', url, true);
       xhr.responseType = responseType;
 
-      xhr.onload = function (e) {
+      xhr.onload = function (e: any) {
         if (xhr.response) {
           callback && callback(null, xhr.response);
         }
@@ -51,9 +55,9 @@
       xhr.send(null);
     },
     extend: function() {
-      var result = {};
-      for (var i = 0; i < arguments.length; i++) {
-        for (var key in arguments[i]) {
+      let result: any = {};
+      for (let i = 0; i < arguments.length; i++) {
+        for (let key in arguments[i]) {
           result[key] = arguments[i][key];
         }
       }
