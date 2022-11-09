@@ -8,10 +8,12 @@ var gulp = require('gulp'),
     jsdoc2md = require('gulp-jsdoc-to-markdown'),
     merge = require('merge-stream'),
     fs = require('fs');
+    ts = require("gulp-typescript");
+    tsProject = ts.createProject("./tsconfig.json");
 
 gulp.task('docs', function () {
   return merge(
-    gulp.src(['src/az.tokens.js', 'src/az.morph.js'])
+    tsProject.src(['src/az.tokens.ts', 'src/az.morph.ts'])
       .pipe(jsdoc2md({ template: fs.readFileSync('./api.hbs', 'utf8') }))
       .on('error', function (err) {
         gutil.log(gutil.colors.red('jsdoc2md failed'), err.message)
@@ -32,7 +34,7 @@ gulp.task('docs', function () {
 });
 
 gulp.task('default', function() {
-  return gulp.src(['src/az.js', 'src/az.*.js'])
+  return tsProject.src(['src/az.ts', 'src/az.*.ts'])
     .pipe(sourcemaps.init())
     .pipe(concat('az.js'))
     .pipe(gulp.dest('dist'))
