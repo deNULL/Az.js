@@ -1,69 +1,60 @@
+/** @namespace Az **/
+let fs: any;
+if (typeof require != 'undefined' && typeof exports === 'object' && typeof module !== 'undefined') {
+  fs = require('fs');
+}
 
-import { define } from "../types";
+export let Az = {
+  load: function(url: string, responseType: string, callback: any) {
+    if (fs) {
+      fs.readFile(url, { encoding: responseType == 'json' ? 'utf8' : null }, function (err: any, data: any) {
+        if (err) {
+          callback(err);
+          return;
+        }
 
-;(function (global: any, factory: any) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
-  typeof define === 'function' && define.amd ? define('Az', factory) :
-  global.Az = factory()
-}(this, function () { 'use strict';
-  /** @namespace Az **/
-  let fs: any;
-  if (typeof require != 'undefined' && typeof exports === 'object' && typeof module !== 'undefined') {
-    fs = require('fs');
-  }
-
-  let Az = {
-    load: function(url: string, responseType: string, callback: any) {
-      if (fs) {
-        fs.readFile(url, { encoding: responseType == 'json' ? 'utf8' : null }, function (err: any, data: any) {
-          if (err) {
-            callback(err);
-            return;
-          }
-
-          if (responseType == 'json') {
-            callback(null, JSON.parse(data));
-          } else
-          if (responseType == 'arraybuffer') {
-            if (data.buffer) {
-              callback(null, data.buffer);
-            } else {
-              let ab = new ArrayBuffer(data.length);
-              let view = new Uint8Array(ab);
-              for (let i = 0; i < data.length; ++i) {
-                  view[i] = data[i];
-              }
-              callback(null, ab);
-            }
+        if (responseType == 'json') {
+          callback(null, JSON.parse(data));
+        } else
+        if (responseType == 'arraybuffer') {
+          if (data.buffer) {
+            callback(null, data.buffer);
           } else {
-            callback(new Error('Unknown responseType'));
+            let ab = new ArrayBuffer(data.length);
+            let view = new Uint8Array(ab);
+            for (let i = 0; i < data.length; ++i) {
+                view[i] = data[i];
+            }
+            callback(null, ab);
           }
-        });
-        return;
-      }
-
-      let xhr: any = new XMLHttpRequest();
-      xhr.open('GET', url, true);
-      xhr.responseType = responseType;
-
-      xhr.onload = function (e: any) {
-        if (xhr.response) {
-          callback && callback(null, xhr.response);
+        } else {
+          callback(new Error('Unknown responseType'));
         }
-      };
-
-      xhr.send(null);
-    },
-    extend: function() {
-      let result: any = {};
-      for (let i = 0; i < arguments.length; i++) {
-        for (let key in arguments[i]) {
-          result[key] = arguments[i][key];
-        }
-      }
-      return result;
+      });
+      return;
     }
-  };
 
-  return Az;
-}));
+    let xhr: any = new XMLHttpRequest();
+    xhr.open('GET', url, true);
+    xhr.responseType = responseType;
+
+    xhr.onload = function (e: any) {
+      if (xhr.response) {
+        callback && callback(null, xhr.response);
+      }
+    };
+
+    xhr.send(null);
+  },
+  extend: function(_1: any, _2: any) {
+    let result: any = {};
+    for (let i = 0; i < arguments.length; i++) {
+      for (let key in arguments[i]) {
+        result[key] = arguments[i][key];
+      }
+    }
+    return result;
+  }
+};
+
+
