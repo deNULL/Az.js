@@ -1,4 +1,3 @@
-import {Morph, Init} from '../dist/az.morph'
 import {Tokens} from '../dist/az.tokens'
 
 describe('Az.Tokens', function() {
