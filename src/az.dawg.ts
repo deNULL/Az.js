@@ -41,299 +41,301 @@ let COMMON_TYPOS: any = {
   '1': 'ёйц', '2': 'йцу', '3': 'цук', '4': 'уке', '5': 'кен', '6': 'енг', '7': 'нгш', '8': 'гшщ', '9': 'шщз', '0': 'щзх-', '-': 'зхъ', '=': '-хъ', '\\': 'ъэ', '.': 'южэ'
 };
 
-function offset(base: any) {
+function offset(base: number): number {
   return ((base >> 10) << ((base & EXTENSION_BIT) >> 6)) & PRECISION_MASK;
 }
 
-function label(base: any) {
+function label(base: number): number {
   return base & (IS_LEAF_BIT | 0xFF) & PRECISION_MASK;
 }
 
-function hasLeaf(base: any) {
+function hasLeaf(base: number): boolean {
   return (base & HAS_LEAF_BIT & PRECISION_MASK) != 0;
 }
 
-function value(base: any) {
+function value(base: number): number {
   return base & ~IS_LEAF_BIT & PRECISION_MASK;
 }
 
-export let DAWG: any = function(this: any, units: any, guide: any, format: any) {
-  this.units = units;
-  this.guide = guide;
-  this.format = format;
-}
-
-DAWG.fromArrayBuffer = function(data: any, format: any) {
-  let dv = new DataView(data),
+let Dawg: any = {
+  fromArrayBuffer(data: ArrayBufferLike, format: string) : DAWG {
+    let dv = new DataView(data),
       unitsLength = dv.getUint32(0, true),
       guideLength = dv.getUint32(unitsLength * 4 + 4, true);
-  return new DAWG(
-    new Uint32Array(data, 4, unitsLength),
-    new Uint8Array(data, unitsLength * 4 + 8, guideLength * 2),
-    format);
-}
-
-DAWG.load = function(url: string, format: any, callback: any) {
-  Az.load(url, 'arraybuffer', function(err: any, data: any) {
-    callback(err, err ? null : DAWG.fromArrayBuffer(data, format));
-  });
-}
-
-DAWG.prototype.followByte = function(c: any, index: number) {
-  let o = offset(this.units[index]);
-  let nextIndex = (index ^ o ^ (c & 0xFF)) & PRECISION_MASK;
-
-  if (label(this.units[nextIndex]) != (c & 0xFF)) {
-    return MISSING;
+    return new DAWG(
+      new Uint32Array(data, 4, unitsLength),
+      new Uint8Array(data, unitsLength * 4 + 8, guideLength * 2),
+      format);
+  },
+  load(url: string, format: string, callback: any): void {
+    Az.load(url, 'arraybuffer', function(err: any, data: any) {
+      callback(err, err ? null : Dawg.fromArrayBuffer(data, format));
+    });
   }
+};
 
-  return nextIndex;
-}
 
-DAWG.prototype.followString = function(str: string, index: number) {
-  index = index || ROOT;
-  for (let i = 0; i < str.length; i++) {
-    let code = str.charCodeAt(i);
-    if (!(code in CP1251)) {
+class DAWG {
+  constructor(private units: Uint32Array, private guide: Uint8Array, private format: string) {}
+
+  followByte(index: number, c: number): number {
+    let o = offset(this.units[index] as number);
+    let nextIndex = (index ^ o ^ (c & 0xFF)) & PRECISION_MASK;
+
+    if (label(this.units[nextIndex] as number) != (c & 0xFF)) {
       return MISSING;
     }
-    index = this.followByte(CP1251[code], index);
+
+    return nextIndex;
+  }
+
+  followString(str: string, index?: number): number {
+    index = index || ROOT;
+    for (let i = 0; i < str.length; i++) {
+      let code = str.charCodeAt(i);
+      if (!(code in CP1251)) {
+        return MISSING;
+      }
+      index = this.followByte(index, CP1251[code]);
+      if (index == MISSING) {
+        return MISSING;
+      }
+    }
+    return index;
+  }
+
+  hasValue(index: number): boolean {
+    return hasLeaf(this.units[index] as number);
+  }
+
+  value(index: number): number {
+    let o = offset(this.units[index] as number);
+    let valueIndex = (index ^ o) & PRECISION_MASK;
+    return value(this.units[valueIndex] as number);
+  }
+
+  find(str: string): number {
+    let index = this.followString(str);
     if (index == MISSING) {
-      return MISSING;
+        return MISSING;
     }
+    if (!this.hasValue(index)) {
+        return MISSING;
+    }
+    return this.value(index);
   }
-  return index;
-}
 
-DAWG.prototype.hasValue = function(index: number) {
-  return hasLeaf(this.units[index]);
-}
+  iterateAll(index: number): number[] {
+    let results: any = [];
+    let stack: any = [index];
+    let key: any = [];
+    let last = ROOT;
+    let label: number | undefined;
 
-DAWG.prototype.value = function(index: number) {
-  let o = offset(this.units[index]);
-  let valueIndex = (index ^ o) & PRECISION_MASK;
-  return value(this.units[valueIndex]);
-}
+    while (true) {
+      index = stack[stack.length - 1];
 
-DAWG.prototype.find = function(str: string) {
-  let index = this.followString(str);
-  if (index == MISSING) {
-      return MISSING;
-  }
-  if (!this.hasValue(index)) {
-      return MISSING;
-  }
-  return this.value(index);
-}
+      if (last != ROOT) {
+        label = this.guide[index << 1];
+        if (label) {
+          index = this.followByte(index, label);
+          if (index == MISSING) {
+            return results;
+          }
+          key.push(label);
+          stack.push(index);
+        } else {
+          do {
+            label = this.guide[(index << 1) + 1];
+            key.pop();
+            stack.pop();
+            if (!stack.length) {
+              return results;
+            }
+            index = stack[stack.length - 1];
+            if (label) {
+              index = this.followByte(index, label);
+              if (index == MISSING) {
+                return results;
+              }
+              key.push(label);
+              stack.push(index);
+            }
+          } while (!label);
+        }
+      }
 
-DAWG.prototype.iterateAll = function(index: number) {
-  let results: any = [];
-  let stack: any = [index];
-  let key: any = [];
-  let last: any = ROOT;
-  let label: any;
-
-  while (true) {
-    index = stack[stack.length - 1];
-
-    if (last != ROOT) {
-      label = this.guide[index << 1];
-      if (label) {
-        index = this.followByte(label, index);
+      while (!this.hasValue(index)) {
+        let label = this.guide[index << 1] as number;
+        index = this.followByte(index, label);
         if (index == MISSING) {
           return results;
         }
         key.push(label);
         stack.push(index);
+      }
+
+      // Only three formats supported
+      if (this.format == 'words') {
+        results.push([
+          ((key[0] ^ 1) << 6) + (key[1] >> 1),
+          ((key[2] ^ 1) << 6) + (key[3] >> 1)
+        ]);
+      } else
+      if (this.format == 'probs') {
+        results.push([
+          ((key[0] ^ 1) << 6) + (key[1] >> 1),
+          ((key[2] ^ 1) << 6) + (key[3] >> 1),
+          ((key[4] ^ 1) << 6) + (key[5] >> 1)
+        ]);
       } else {
-        do {
-          label = this.guide[(index << 1) + 1];
-          key.pop();
-          stack.pop();
-          if (!stack.length) {
-            return results;
-          }
-          index = stack[stack.length - 1];
-          if (label) {
-            index = this.followByte(label, index);
-            if (index == MISSING) {
-              return results;
-            }
-            key.push(label);
-            stack.push(index);
-          }
-        } while (!label);
+        // Raw bytes
+        results.push(key.slice());
       }
+      last = index;
     }
-
-    while (!this.hasValue(index)) {
-      let label = this.guide[index << 1];
-      index = this.followByte(label, index);
-      if (index == MISSING) {
-        return results;
-      }
-      key.push(label);
-      stack.push(index);
-    }
-
-    // Only three formats supported
-    if (this.format == 'words') {
-      results.push([
-        ((key[0] ^ 1) << 6) + (key[1] >> 1),
-        ((key[2] ^ 1) << 6) + (key[3] >> 1)
-      ]);
-    } else
-    if (this.format == 'probs') {
-      results.push([
-        ((key[0] ^ 1) << 6) + (key[1] >> 1),
-        ((key[2] ^ 1) << 6) + (key[3] >> 1),
-        ((key[4] ^ 1) << 6) + (key[5] >> 1)
-      ]);
-    } else {
-      // Raw bytes
-      results.push(key.slice());
-    }
-    last = index;
   }
-}
 
-// Features:
-//  replaces (е -> ё) (DONE)
-//  stutter (ннет -> нет, гоол -> гол, д-да -> да)
-//  typos (count-limited):
-//    swaps (солво -> слово)
-//    extra letters (свлово -> слово)
-//    missing letters (сово -> слово)
-//    wrong letters (сково -> слово)
- DAWG.prototype.findAll = function(str: any, replaces: any, mstutter: any, mtypos: any) {
-  mtypos = mtypos || 0;
-  mstutter = mstutter || 0;
-  let results: any = [],
-      prefixes: any = [['', 0, 0, 0, ROOT]],
-      prefix: any, index: number, len: number, code: number, cur: any, typos: any, stutter: any;
+  // Features:
+  //  replaces (е -> ё) (DONE)
+  //  stutter (ннет -> нет, гоол -> гол, д-да -> да)
+  //  typos (count-limited):
+  //    swaps (солво -> слово)
+  //    extra letters (свлово -> слово)
+  //    missing letters (сово -> слово)
+  //    wrong letters (сково -> слово)
+  findAll(str: string, replaces: any, mstutter: number, mtypos: number): any {
+    mtypos = mtypos || 0;
+    mstutter = mstutter || 0;
+    let results: any = [],
+        prefixes: any = [['', 0, 0, 0, ROOT]],
+        prefix: any, index: number, len: number, code: number, cur: any, typos: any, stutter: any;
 
-  while (prefixes.length) {
-    prefix = prefixes.pop();
-    index = prefix[4], stutter = prefix[3], typos = prefix[2], len = prefix[1], prefix = prefix[0];
+    while (prefixes.length) {
+      prefix = prefixes.pop();
+      index = prefix[4], stutter = prefix[3], typos = prefix[2], len = prefix[1], prefix = prefix[0];
 
-    // Done
-    if (len == str.length) {
+      // Done
+      if (len == str.length) {
+        if (typos < mtypos && stutter <= mstutter) {
+          // Allow missing letter(s) at the very end
+          let label = this.guide[index << 1] as number; // First child
+          do {
+            cur = this.followByte(index, label);
+            if ((cur != MISSING) && (label in UCS2)) {
+              prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
+            }
+            label = this.guide[(cur << 1) + 1] as number; // Next child
+          } while (cur != MISSING);
+        }
+
+        if (this.format == 'int') {
+          if (this.hasValue(index)) {
+            results.push([prefix, this.value(index)]);
+          }
+          continue;
+        }
+        // Find all payloads
+        if (this.format == 'words' || this.format == 'probs') {
+          index = this.followByte(index, 1); // slabeleparator
+          if (index == MISSING) {
+            continue;
+          }
+        }
+        results.push([prefix, this.iterateAll(index), stutter, typos]);
+        continue;
+      }
+
+      // Follow a replacement path
+      if (replaces && str[len] as string in replaces) {
+        code = replaces[str[len] as string].charCodeAt(0);
+        if (code in CP1251) {
+          cur = this.followByte(index, CP1251[code]);
+          if (cur != MISSING) {
+            prefixes.push([ prefix + replaces[str[len] as string], len + 1, typos, stutter, cur ]);
+          }
+        }
+      }
+
+      // Follow typos path (if not over limit)
       if (typos < mtypos && stutter <= mstutter) {
-        // Allow missing letter(s) at the very end
-        let label = this.guide[index << 1]; // First child
+        // Skip a letter entirely (extra letter)
+        prefixes.push([ prefix, len + 1, typos + 1, stutter, index ]);
+
+        // Add a letter (missing)
+        // TODO: iterate all childs?
+        let label = this.guide[index << 1] as number; // First child
         do {
-          cur = this.followByte(label, index);
+          cur = this.followByte(index, label);
           if ((cur != MISSING) && (label in UCS2)) {
             prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
           }
-          label = this.guide[(cur << 1) + 1]; // Next child
+          label = this.guide[(cur << 1) + 1] as number; // Next child
         } while (cur != MISSING);
-      }
 
-      if (this.format == 'int') {
-        if (this.hasValue(index)) {
-          results.push([prefix, this.value(index)]);
-        }
-        continue;
-      }
-      // Find all payloads
-      if (this.format == 'words' || this.format == 'probs') {
-        index = this.followByte(1, index); // separator
-        if (index == MISSING) {
-          continue;
-        }
-      }
-      results.push([prefix, this.iterateAll(index), stutter, typos]);
-      continue;
-    }
-
-    // Follow a replacement path
-    if (replaces && str[len] in replaces) {
-      code = replaces[str[len]].charCodeAt(0);
-      if (code in CP1251) {
-        cur = this.followByte(CP1251[code], index);
-        if (cur != MISSING) {
-          prefixes.push([ prefix + replaces[str[len]], len + 1, typos, stutter, cur ]);
-        }
-      }
-    }
-
-    // Follow typos path (if not over limit)
-    if (typos < mtypos && stutter <= mstutter) {
-      // Skip a letter entirely (extra letter)
-      prefixes.push([ prefix, len + 1, typos + 1, stutter, index ]);
-
-      // Add a letter (missing)
-      // TODO: iterate all childs?
-      let label = this.guide[index << 1]; // First child
-      do {
-        cur = this.followByte(label, index);
-        if ((cur != MISSING) && (label in UCS2)) {
-          prefixes.push([ prefix + UCS2[label], len, typos + 1, stutter, cur ]);
-        }
-        label = this.guide[(cur << 1) + 1]; // Next child
-      } while (cur != MISSING);
-
-      // Replace a letter
-      // Now it checks only most probable typos (located near to each other on keyboards)
-      let possible: any = COMMON_TYPOS[str[len]];
-      if (possible) {
-        for (let i = 0; i < possible.length; i++) {
-          code = possible.charCodeAt(i);
-          if (code in CP1251) {
-            cur = this.followByte(CP1251[code], index);
-            if (cur != MISSING) {
-              // for missing letter we need to iterate all childs, not only COMMON_TYPOS
-              // prefixes.push([ prefix + possible[i], len, typos + 1, stutter, cur ]);
-              prefixes.push([ prefix + possible[i], len + 1, typos + 1, stutter, cur ]);
+        // Replace a letterlabel
+        // Now it checks only most probable typos (located near to each other on keyboards)
+        let possible: any = COMMON_TYPOS[str[len] as string];
+        if (possible) {
+          for (let i = 0; i < possible.length; i++) {
+            code = possible.charCodeAt(i);
+            if (code in CP1251) {
+              cur = this.followByte(index, CP1251[code]);
+              if (cur != MISSING) {
+                // for missing letter we need to iterate all childs, not only COMMON_TYPOS
+                // prefixes.push([ prefix + possible[i], len, typos + 1, stutter, cur ]);
+                prefixes.push([ prefix + possible[i], len + 1, typos + 1, stutter, cur ]);
+              }
             }
           }
         }
-      }
 
-      // Swapped two letters
-      // TODO: support for replacements?
-      if (len < str.length - 1) {
-        code = str.charCodeAt(len + 1);
-        if (code in CP1251) {
-          cur = this.followByte(CP1251[code], index);
-          if (cur != MISSING) {
-            code = str.charCodeAt(len);
-            if (code in CP1251) {
-              cur = this.followByte(CP1251[code], cur);
-              if (cur != MISSING) {
-                prefixes.push([ prefix + str[len + 1] + str[len], len + 2, typos + 1, stutter, cur ]);
+        // Swapped two letters
+        // TODO: support for replacements?
+        if (len < str.length - 1) {
+          code = str.charCodeAt(len + 1);
+          if (code in CP1251) {
+            cur = this.followByte(index, CP1251[code]);
+            if (cur != MISSING) {
+              code = str.charCodeAt(len);
+              if (code in CP1251) {
+                cur = this.followByte(cur, CP1251[code]);
+                if (cur != MISSING) {
+                  prefixes.push([ prefix + str[len + 1] + str[len], len + 2, typos + 1, stutter, cur ]);
+                }
               }
             }
           }
         }
       }
-    }
 
-    // Follow base path
-    code = str.charCodeAt(len);
-    if (code in CP1251) {
-      cur = this.followByte(CP1251[code], index);
-      if (cur != MISSING) {
-        prefixes.push([ prefix + str[len], len + 1, typos, stutter, cur ]);
+      // Follow base path
+      code = str.charCodeAt(len);
+      if (code in CP1251) {
+        cur = this.followByte(index, CP1251[code]);
+        if (cur != MISSING) {
+          prefixes.push([ prefix + str[len], len + 1, typos, stutter, cur ]);
 
-        while (stutter < mstutter && typos <= mtypos && len < str.length - 1) {
-          // Follow a simple stutter path (merge two equal letters into one)
-          if (str[len] == str[len + 1]) {
-            prefixes.push([ prefix + str[len], len + 2, typos, stutter + 1, cur ]);
-            len++;
-          } else
-          // Follow a stutter with a dash (д-да)
-          if (len < str.length - 2 && str[len + 1] == '-' && str[len] == str[len + 2]) {
-            prefixes.push([ prefix + str[len], len + 3, typos, stutter + 1, cur ]);
-            len += 2;
-          } else {
-            break;
+          while (stutter < mstutter && typos <= mtypos && len < str.length - 1) {
+            // Follow a simple stutter path (merge two equal letters into one)
+            if (str[len] == str[len + 1]) {
+              prefixes.push([ prefix + str[len], len + 2, typos, stutter + 1, cur ]);
+              len++;
+            } else
+            // Follow a stutter with a dash (д-да)
+            if (len < str.length - 2 && str[len + 1] == '-' && str[len] == str[len + 2]) {
+              prefixes.push([ prefix + str[len], len + 3, typos, stutter + 1, cur ]);
+              len += 2;
+            } else {
+              break;
+            }
+            stutter++;
           }
-          stutter++;
         }
       }
     }
+    return results;
   }
-  return results;
 }
+
+export { DAWG, Dawg };
