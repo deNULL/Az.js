@@ -1,5 +1,5 @@
 import {Az} from './az'
-import {DAWG} from './az.dawg'
+import {DAWG, Dawg} from './az.dawg'
 
 /** @namespace Az **/
 let words: any,
@@ -1048,7 +1048,7 @@ export const Init = function(path: string, callback: any) {
   }
 
   loading++;
-  DAWG.load(path + '/words.dawg', 'words', function(err: any, dawg: any) {
+  Dawg.load(path + '/words.dawg', 'words', function(err: any, dawg: any) {
     if (err) {
       callback(err);
       return;
@@ -1060,7 +1060,7 @@ export const Init = function(path: string, callback: any) {
   for (let prefix = 0; prefix < 3; prefix++) {
     (function(prefix) {
       loading++;
-      DAWG.load(path + '/prediction-suffixes-' + prefix + '.dawg', 'probs', function(err: any, dawg: any) {
+      Dawg.load(path + '/prediction-suffixes-' + prefix + '.dawg', 'probs', function(err: any, dawg: any) {
         if (err) {
           callback(err);
           return;
@@ -1072,7 +1072,7 @@ export const Init = function(path: string, callback: any) {
   }
 
   loading++;
-  DAWG.load(path + '/p_t_given_w.intdawg', 'int', function(err: any, dawg: any) {
+  Dawg.load(path + '/p_t_given_w.intdawg', 'int', function(err: any, dawg: any) {
     if (err) {
       callback(err);
       return;
