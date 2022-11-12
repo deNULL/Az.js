@@ -22,6 +22,59 @@ for (let i = 0; i < TLDs.length; i++) {
   defaults_tokens.links.tlds[TLDs[i]] = true;
 }
 
+class Token {
+  quote?: string;
+  _str: string;
+
+  /**
+ * Токен, соответствующий некоторой подстроке в представленном на вход тексте.
+ *
+ * @constructor
+ * @property {string} type Тип токена.
+ * @property {string} subType Подтип токена.
+ * @property {number} st Индекс первого символа, входящего в токен.
+ * @property {number} en Индекс последнего символа, входящего в токен.
+ * @property {number} length Длина токена.
+ * @property {boolean} firstUpper True, если первый символ токена является заглавной буквой.
+ * @property {boolean} allUpper True, если все символы в токене являются заглавными буквами.
+ */
+  constructor(public source: any, public st: number, public length: number, public index: number, public firstUpper: boolean, public allUpper: boolean, public type: string, public subType?: string) {
+    this.quote = '';
+    this._str = '';
+    if (subType) {
+      this.subType = subType;
+    }
+  }
+
+  toString(): string {
+    return (('_str' in this) && (this._str.length == this.length)) ? this._str : (this._str = this.source.substr(this.st, this.length));
+  }
+
+  indexOf(str: string): number {
+    if (str.length == 1) {
+      for (let i = 0; i < this.length; i++) {
+        if (this.source[this.st + i] == str) {
+          return i;
+        }
+      }
+      return -1;
+    }
+    return this.toString().indexOf(str);
+  }
+
+  toLowerCase(): string {
+    return this.toString().toLocaleLowerCase();
+  }
+
+  isCapitalized(): boolean {
+    return this.firstUpper && !this.allUpper;
+  }
+
+  en(): number {
+    return this.st + this.length - 1;
+  }
+}
+
 /**
  * Токен, соответствующий некоторой подстроке в представленном на вход тексте.
  *
@@ -34,41 +87,41 @@ for (let i = 0; i < TLDs.length; i++) {
  * @property {boolean} firstUpper True, если первый символ токена является заглавной буквой.
  * @property {boolean} allUpper True, если все символы в токене являются заглавными буквами.
  */
-let Token: any = function(this: any, source: any, st: number, length: number, index: any, firstUpper: boolean, allUpper: boolean, type: string, subType: string) {
-  this.source = source;
-  this.st = st;
-  this.length = length;
-  this.index = index;
-  this.firstUpper = firstUpper;
-  this.allUpper = allUpper;
-  this.type = type;
-  if (subType) {
-    this.subType = subType;
-  }
-}
-Token.prototype.toString = function() {
-  return (('_str' in this) && (this._str.length == this.length)) ? this._str : (this._str = this.source.substr(this.st, this.length));
-}
-Token.prototype.indexOf = function(str: string): number {
-  if (str.length == 1) {
-    for (let i = 0; i < this.length; i++) {
-      if (this.source[this.st + i] == str) {
-        return i;
-      }
-    }
-    return -1;
-  }
-  return this.toString().indexOf(str);
-}
-Token.prototype.toLowerCase = function() {
-  return this.toString().toLocaleLowerCase();
-}
-Token.prototype.isCapitalized = function() {
-  return this.firstUpper && !this.allUpper;
-}
-Token.prototype.en = function() {
-  return this.st + this.length - 1;
-}
+// let Token: any = function(this: any, source: any, st: number, length: number, index: any, firstUpper: boolean, allUpper: boolean, type: string, subType: string) {
+//   this.source = source;
+//   this.st = st;
+//   this.length = length;
+//   this.index = index;
+//   this.firstUpper = firstUpper;
+//   this.allUpper = allUpper;
+//   this.type = type;
+//   if (subType) {
+//     this.subType = subType;
+//   }
+// }
+// Token.prototype.toString = function() {
+//   return (('_str' in this) && (this._str.length == this.length)) ? this._str : (this._str = this.source.substr(this.st, this.length));
+// }
+// Token.prototype.indexOf = function(str: string): number {
+//   if (str.length == 1) {
+//     for (let i = 0; i < this.length; i++) {
+//       if (this.source[this.st + i] == str) {
+//         return i;
+//       }
+//     }
+//     return -1;
+//   }
+//   return this.toString().indexOf(str);
+// }
+// Token.prototype.toLowerCase = function() {
+//   return this.toString().toLocaleLowerCase();
+// }
+// Token.prototype.isCapitalized = function() {
+//   return this.firstUpper && !this.allUpper;
+// }
+// Token.prototype.en = function() {
+//   return this.st + this.length - 1;
+// }
 
 /**
  * Создает токенизатор текста с заданными опциями.
@@ -104,48 +157,56 @@ Token.prototype.en = function() {
  *  домены верхнего уровня, в которых будут распознаваться ссылки. По умолчанию
  *  текущий список всех таких доменов.
  */
-export let Tokens: any = function(this: any, text: string, config: any) {
-  if (this instanceof Tokens) {
-    this.tokens = [];
-    this.source = '';
-    if (typeof text == 'string') {
-      this.config = config ? Az.extend(defaults_tokens, config) : defaults_tokens;
-      this.append(text);
+
+class Tokens {
+  static WORD = 'WORD';
+  static NUMBER = 'NUMBER';
+  static OTHER = 'OTHER';
+  static DIGIT = 'DIGIT';
+  static CYRIL = 'CYRIL';
+  static LATIN = 'LATIN';
+  static MIXED = 'MIXED';
+  static PUNCT = 'PUNCT';
+  static SPACE = 'SPACE';
+  static MARKUP = 'MARKUP';
+  static NEWLINE = 'NEWLINE';
+  static EMAIL = 'EMAIL';
+  static LINK = 'LINK';
+  static HASHTAG = 'HASHTAG';
+  static MENTION = 'MENTION';
+  static TAG = 'TAG';
+  static CONTENT = 'CONTENT';
+  static SCRIPT = 'SCRIPT';
+  static STYLE = 'STYLE';
+  static COMMENT = 'COMMENT';
+  static CLOSING = 'CLOSING';
+  static TEMPLATE = 'TEMPLATE';
+  static RANGE = 'RANGE';
+  static ENTITY = 'ENTITY';
+
+  tokens: Token[] | undefined;
+  index: number | undefined;
+  source: string | undefined;
+
+  constructor(private text: string, private config: any) {
+
+    if (this instanceof Tokens) {
+      this.tokens = [];
+      this.source = '';
+      if (typeof text == 'string') {
+        this.config = config ? Az.extend(defaults_tokens, config) : defaults_tokens;
+        this.append(text);
+      } else {
+        this.config = text ? Az.extend(defaults_tokens, text) : defaults_tokens;
+      }
+      this.index = -1;
     } else {
-      this.config = text ? Az.extend(defaults_tokens, text) : defaults_tokens;
+      return new Tokens(text, config);
     }
-    this.index = -1;
-  } else {
-    return new Tokens(text, config);
   }
-}
 
-Tokens.WORD = new String('WORD');
-Tokens.NUMBER = new String('NUMBER');
-Tokens.OTHER = new String('OTHER');
-Tokens.DIGIT = new String('DIGIT');
-Tokens.CYRIL = new String('CYRIL');
-Tokens.LATIN = new String('LATIN');
-Tokens.MIXED = new String('MIXED');
-Tokens.PUNCT = new String('PUNCT');
-Tokens.SPACE = new String('SPACE');
-Tokens.MARKUP = new String('MARKUP');
-Tokens.NEWLINE = new String('NEWLINE');
-Tokens.EMAIL = new String('EMAIL');
-Tokens.LINK = new String('LINK');
-Tokens.HASHTAG = new String('HASHTAG');
-Tokens.MENTION = new String('MENTION');
-Tokens.TAG = new String('TAG');
-Tokens.CONTENT = new String('CONTENT');
-Tokens.SCRIPT = new String('SCRIPT');
-Tokens.STYLE = new String('STYLE');
-Tokens.COMMENT = new String('COMMENT');
-Tokens.CLOSING = new String('CLOSING');
-Tokens.TEMPLATE = new String('TEMPLATE');
-Tokens.RANGE = new String('RANGE');
-Tokens.ENTITY = new String('ENTITY');
 
-/**
+  /**
  * Отправляет ещё один кусок текста на токенизацию. Таким образом вполне
  * допустимо обрабатывать большие документы частями, многократно вызывая этот
  * метод. При этом токен может начаться в одной части и продолжиться в
@@ -156,557 +217,519 @@ Tokens.ENTITY = new String('ENTITY');
  *  опции, заданные в конструкторе токенизатора.
  * @see Tokens
  */
-Tokens.prototype.append = function(text: string, config: any) {
-  'use strict';
-  // Для производительности:
-  // - как можно меньше операций конкатенции/разбивки строк
-  // - вместо сравнения всего токена, проверяем соответствующий ему символ в исходной строке
-  // - типы токенов - константы в Tokens, формально это строки, но сравниваем через === (как объекты)
-  config = config ? Az.extend(this.config, config) : this.config;
-  if (config.links && (config.links.tlds === true)) {
-    config.links.tlds = defaults_tokens.links.tlds;
-  }
-
-  let offs = this.source.length;
-  this.source += text;
-
-  let s = this.source, ts = this.tokens;
-  for (let i = offs; i < s.length; i++) {
-    let ch = s[i];
-    let code = s.charCodeAt(i);
-
-    let append = false;
-    let last = ts.length - 1;
-    let token = ts[last];
-    let st = i;
-
-    if (config.html && (ch == ';')) {
-      // &nbsp;
-      if ((last > 0) &&
-          (token.type === Tokens.WORD) &&
-          (ts[last - 1].length == 1) &&
-          (s[ts[last - 1].st] == '&')) {
-        let name = token.toLowerCase();
-        if (name in HTML_ENTITIES) {
-          ch = HTML_ENTITIES[name];
-          code = ch.charCodeAt(0);
-
-          last -= 2;
-          token = ts[last];
-          ts.length = last + 1;
-        }
-      } else
-      // &x123AF5;
-      // &1234;
-      if ((last > 1) &&
-          ((token.type === Tokens.NUMBER) ||
-            ((token.type === Tokens.WORD) &&
-            (s[token.st] == 'x'))) &&
-          (ts[last - 1].length == 1) &&
-          (s[ts[last - 1].st] == '#') &&
-          (ts[last - 1].length == 1) &&
-          (s[ts[last - 1].st] == '&')) {
-        if (s[token.st] == 'x') {
-          code = parseInt(token.toString().substr(1), 16);
-        } else {
-          code = parseInt(token.toString(), 10);
-        }
-        ch = String.fromCharCode(code);
-
-        last -= 3;
-        token = ts[last];
-        ts.length = last + 1;
-      }
+  append(text: string, config?: any) {
+    'use strict';
+    // Для производительности:
+    // - как можно меньше операций конкатенции/разбивки строк
+    // - вместо сравнения всего токена, проверяем соответствующий ему символ в исходной строке
+    // - типы токенов - константы в Tokens, формально это строки, но сравниваем через === (как объекты)
+    config = config ? Az.extend(this.config, config) : this.config;
+    if (config.links && (config.links.tlds === true)) {
+      config.links.tlds = defaults_tokens.links.tlds;
     }
 
-    let charType = Tokens.OTHER;
-    let charUpper = (ch.toLocaleLowerCase() != ch);
-    if (code >= 0x0400 && code <= 0x04FF) charType = Tokens.CYRIL;
-    if ((code >= 0x0041 && code <= 0x005A) || (code >= 0x0061 && code <= 0x007A) || (code >= 0x00C0 && code <= 0x024F)) charType = Tokens.LATIN;
-    if (code >= 0x0030 && code <= 0x0039) charType = Tokens.DIGIT;
-    if ((code <= 0x0020) || (code >= 0x0080 && code <= 0x00A0)) charType = Tokens.SPACE;
-    if ('‐-−‒–—―.…,:;?!¿¡()[]«»"\'’‘’“”/⁄'.indexOf(ch) > -1) charType = Tokens.PUNCT;
+    let offs = this.source?.length as number;
+    this.source += text;
 
-    let tokenType = charType;
-    let tokenSubType = false;
-    if (charType === Tokens.CYRIL || charType === Tokens.LATIN) {
-      tokenType = Tokens.WORD;
-      tokenSubType = charType;
-    } else
-    if (charType === Tokens.DIGIT) {
-      tokenType = Tokens.NUMBER;
-    }
+    let s = this.source as string, ts = this.tokens as Token[];
+    for (let i = offs; i < s.length; i++) {
+      let ch = s[i];
+      let code = s.charCodeAt(i);
 
-    let lineStart = !token || (s[token.st + token.length - 1] == '\n');
+      let append = false;
+      let last = ts.length - 1;
+      let token = ts[last] as Token;
+      let st = i;
 
-    if (config.wiki) {
-      if (lineStart) {
-        if (':;*#~|'.indexOf(ch) > -1) {
-          tokenType = Tokens.MARKUP;
-          tokenSubType = Tokens.NEWLINE;
-        }
-      }
-      if ('={[|]}'.indexOf(ch) > -1) {
-        tokenType = Tokens.MARKUP;
-      }
-    }
-
-    if (config.markdown) {
-      if (lineStart) {
-        if ('=-#>+-'.indexOf(ch) > -1) {
-          tokenType = Tokens.MARKUP;
-          tokenSubType = Tokens.NEWLINE;
-        }
-      }
-      if ('[]*~_`\\'.indexOf(ch) > -1) {
-        tokenType = Tokens.MARKUP;
-      }
-    }
-
-    if (token) {
-      if (config.wiki &&
-          (ch != "'") &&
-          (token.length == 1) &&
-          (s[token.st] == "'") &&
-          (last > 0) &&
-          (ts[last - 1].type === Tokens.WORD) &&
-          (ts[last - 1].subType === Tokens.LATIN)) {
-        ts[last - 1].length += token.length;
-
-        last -= 1;
-        ts.length = last + 1;
-        token = ts[last];
-      }
-
-      // Preprocess last token
-      if (config.links &&
-          config.links.tlds &&
-          ((charType === Tokens.PUNCT) ||
-            (charType === Tokens.SPACE)) &&
-          (ts.length > 2) &&
-          (ts[last - 2].type === Tokens.WORD) &&
-          (ts[last - 1].length == 1) &&
-          (s[ts[last - 1].st] == '.') &&
-          (ts[last].type === Tokens.WORD) &&
-          (token.toString() in config.links.tlds)) {
-
-        // Merge all subdomains
-        while ((last >= 2) &&
-                (ts[last - 2].type === Tokens.WORD) &&
-                (ts[last - 1].length == 1) &&
-                ((s[ts[last - 1].st] == '.') ||
-                (s[ts[last - 1].st] == '@') ||
-                (s[ts[last - 1].st] == ':'))) {
-          last -= 2;
-          token = ts[last];
-          token.length += ts[last + 1].length + ts[last + 2].length;
-          token.allUpper = token.allUpper && ts[last + 1].allUpper && ts[last + 2].allUpper;
-        }
-
-        if (config.emails &&
-            (token.indexOf('@') > -1) &&
-            (token.indexOf(':') == -1)) {
-          // URL can contain a '@' but in that case it should be in form http://user@site.com or user:pass@site.com
-          // So if URL has a '@' but no ':' in it, we assume it's a email
-          token.type = Tokens.EMAIL;
-        } else {
-          token.type = Tokens.LINK;
-
-          if (ch == '/') {
-            append = true;
-          }
-        }
-        ts.length = last + 1;
-      } else
-
-      // Process next char (start new token or append to the previous one)
-      if (token.type === Tokens.LINK) {
-        if ((ch == ')') &&
-            (last >= 1) &&
-            (ts[last - 1].type === Tokens.MARKUP) &&
-            (ts[last - 1].length == 1) &&
-            (s[ts[last - 1].st] == '(')) {
-          tokenType = Tokens.MARKUP;
-        } else
-        if ((charType !== Tokens.SPACE) && (ch != ',') && (ch != '<')) {
-          append = true;
-        }
-      } else
-      if (token.type === Tokens.EMAIL) {
-        if ((charType === Tokens.CYRIL) || (charType === Tokens.LATIN) || (ch == '.')) {
-          append = true;
-        }
-      } else
-      if ((token.type === Tokens.HASHTAG) || (token.type === Tokens.MENTION)) {
-        if ((charType === Tokens.CYRIL) ||
-            (charType == Tokens.LATIN) ||
-            (charType == Tokens.DIGIT) ||
-            (ch == '_') || ((ch == '@') && (token.indexOf('@') == -1))) {
-          append = true;
-        }
-      } else
-      if ((token.type === Tokens.TAG) && (token.quote || (s[token.en()] != '>'))) {
-        append = true;
-        if (token.quote) {
-          if ((ch == token.quote) && (s[token.en()] != '\\')) {
-            delete token.quote;
-          }
-        } else
-        if ((ch == '"') || (ch == "'")) {
-          token.quote = ch;
-        }
-      } else
-      if (token.type === Tokens.CONTENT) {
-        append = true;
-        if (token.quote) {
-          if ((ch == token.quote) && (s[token.en()] != '\\')) {
-            delete token.quote;
-          }
-        } else
-        if ((ch == '"') || (ch == "'")) {
-          token.quote = ch;
-        } else
-        if (ch == '>') {
-          if ((token.length >= 8) && (token.toString().substr(-8) == '</script')) {
-            token.length -= 8;
-            st -= 8;
-
-            append = false;
-            tokenType = Tokens.TAG;
-            tokenSubType = Tokens.CLOSING;
-          } else
-          if ((token.length >= 7) && (token.toString().substr(-7) == '</style')) {
-            token.length -= 7;
-            st -= 7;
-
-            append = false;
-            tokenType = Tokens.TAG;
-            tokenSubType = Tokens.CLOSING;
-          }
-        }
-      } else
-      if ((token.type === Tokens.TAG) &&
-          (token.type !== Tokens.CLOSING) &&
-          (token.length >= 8) &&
-          (token.toLowerCase().substr(1, 6) == 'script')) {
-        tokenType = Tokens.CONTENT;
-        tokenSubType = Tokens.SCRIPT;
-      } else
-      if ((token.type === Tokens.TAG) &&
-          (token.type !== Tokens.CLOSING) &&
-          (token.length >= 7) &&
-          (token.toLowerCase().substr(1, 5) == 'style')) {
-        tokenType = Tokens.CONTENT;
-        tokenSubType = Tokens.STYLE;
-      } else
-      if (config.html &&
-          (token.length == 1) &&
-          (s[token.st] == '<') &&
-          ((charType === Tokens.LATIN) || (ch == '!') || (ch == '/'))) {
-        append = true;
-        token.type = Tokens.TAG;
-        if (ch == '!') {
-          token.subType = Tokens.COMMENT;
-        } else
-        if (ch == '/') {
-          token.subType = Tokens.CLOSING;
-        }
-      } else
-      if (token.type === Tokens.CONTENT) {
-        append = true;
-      } else
-      if ((token.type === Tokens.MARKUP) &&
-          (token.subType == Tokens.TEMPLATE) &&
-          ((s[token.en()] != '}') ||
-            (s[token.en() - 1] != '}'))) {
-        append = true;
-      } else
-      if ((token.type === Tokens.MARKUP) &&
-          (token.type === Tokens.LINK) &&
-          (s[token.en()] != ')')) {
-        append = true;
-      } else
-      if ((token.type === Tokens.MARKUP) &&
-          (s[token.st] == '`') &&
-          (token.subType === Tokens.NEWLINE) &&
-          (charType === Tokens.LATIN)) {
-        append = true;
-      } else
-      if ((charType === Tokens.CYRIL) || (charType === Tokens.LATIN)) {
-        if (token.type === Tokens.WORD) {
-          append = true;
-          token.subType = (token.subType == charType) ? token.subType : Tokens.MIXED;
-        } else
-        if (token.type === Tokens.NUMBER) { // Digits + ending
-          append = true;
-          token.subType = (token.subType && token.subType != charType) ? Tokens.MIXED : charType;
-        } else
-        if (config.hashtags && (token.length == 1) && (s[token.st] == '#')) { // Hashtags
-          append = true;
-          token.type = Tokens.HASHTAG;
-        } else
-        if (config.mentions &&
-            (token.length == 1) &&
-            (s[token.st] == '@') &&
-            ((last == 0) || (ts[last - 1].type === Tokens.SPACE))) { // Mentions
-          append = true;
-          token.type = Tokens.MENTION;
-        } else
-        if ((charType === Tokens.LATIN) &&
-            (token.length == 1) &&
-            ((s[token.st] == "'") || (s[token.st] == '’'))) {
-          append = true;
-          token.type = Tokens.WORD;
-          token.subType = Tokens.LATIN;
-        } else
-        if ((token.length == 1) && (s[token.st] == '-')) { // -цать (?), 3-й
-          append = true;
-
-          if ((last > 0) && (ts[last - 1].type === Tokens.NUMBER)) {
-            token = ts[last - 1];
-            token.length += ts[last].length;
-
-            ts.length -= 1;
-          }
-
-          token.type = Tokens.WORD;
-          token.subType = charType;
-        }
-      } else
-      if (charType === Tokens.DIGIT) {
-        if (token.type === Tokens.WORD) {
-          append = true;
-          token.subType = Tokens.MIXED;
-        } else
-        if (token.type === Tokens.NUMBER) {
-          append = true;
-        } else
-        if ((token.length == 1) &&
-            ((s[token.st] == '+') || (s[token.st] == '-'))) {
-          append = true;
-
-          if ((last > 0) && (ts[last - 1].type === Tokens.NUMBER)) {
-            token = ts[last - 1];
-            token.length += ts[last].length;
-            token.subType = Tokens.RANGE;
-
-            ts.length -= 1;
-          }
-
-          token.type = Tokens.NUMBER;
-        } else
-        if ((token.length == 1) &&
-            ((s[token.st] == ',') || (s[token.st] == '.')) &&
-            (ts.length > 1) &&
-            (ts[last - 1].type === Tokens.NUMBER)) {
-          append = true;
-
-          token = ts[last - 1];
-          token.length += ts[last].length;
-
-          ts.length -= 1;
-        }
-      } else
-      if (charType === Tokens.SPACE) {
-        if (token.type === Tokens.SPACE) {
-          append = true;
-        }
-      } else
-      if ((token.type === Tokens.MARKUP) &&
-          (s[token.st] == ch) &&
-          ('=-~:*#`\'>_'.indexOf(ch) > -1)) {
-        append = true;
-      } else
-      if (ch == '.') {
-        if (config.links &&
-            config.links.www &&
-            (token.length == 3) &&
-            (token.toLowerCase() == 'www')) { // Links without protocol but with www
-          append = true;
-          token.type = Tokens.LINK;
-        }
-      } else
-      if (config.wiki && (ch == "'") && (s[token.en()] == "'")) {
-        if (token.length > 1) {
-          token.length--;
-          st--;
-          tokenType = Tokens.MARKUP;
-        } else {
-          append = true;
-          token.type = Tokens.MARKUP;
-        }
-      } else
-      if ((ch == '-') ||
-          ((token.subType == Tokens.LATIN) &&
-            ((ch == '’') || (ch == "'")))) {
-        if (token.type === Tokens.WORD) {
-          append = true;
-        }
-      } else
-      if (ch == '/') {
-        if (config.links &&
-            config.links.protocols &&
-            (ts.length > 2) &&
-            (ts[last - 2].type === Tokens.WORD) &&
-            (ts[last - 2].subType == Tokens.LATIN) &&
-            (ts[last - 1].length == 1) &&
-            (s[ts[last - 1].st] == ':') &&
-            (ts[last].length == 1) &&
-            (s[ts[last].st] == '/')) { // Links (with protocols)
-          append = true;
-
-          token = ts[last - 2];
-          token.length += ts[last - 1].length + ts[last].length;
-          token.allUpper = token.allUpper && ts[last - 1].allUpper && ts[last].allUpper;
-          token.type = Tokens.LINK;
-
-          ts.length -= 2;
-        }
-      } else
-      if (config.html && ch == ';') {
+      if (config.html && (ch == ';')) {
+        // &nbsp;
         if ((last > 0) &&
             (token.type === Tokens.WORD) &&
-            (ts[last - 1].length == 1) &&
-            (s[ts[last - 1].st] == '&')) {
-          append = true;
+            (ts[last - 1]?.length == 1) &&
+            (s[ts[last - 1]!.st] == '&')) {
+          let name = token.toLowerCase();
+          if (name in HTML_ENTITIES) {
+            ch = HTML_ENTITIES[name];
+            code = ch!.charCodeAt(0) as number;
 
-          token = ts[last - 1];
-          token.length += ts[last].length;
-          token.allUpper = token.allUpper && ts[last - 1].allUpper;
-          token.type = Tokens.ENTITY;
-
-          ts.length -= 1;
+            last -= 2;
+            token = ts[last] as Token;
+            ts.length = last + 1;
+          }
         } else
+        // &x123AF5;
+        // &1234;
         if ((last > 1) &&
-            ((token.type === Tokens.WORD) ||
-              (token.type === Tokens.NUMBER)) &&
-            (ts[last - 1].length == 1) &&
-            (s[ts[last - 1].st] == '#') &&
-            (ts[last - 2].length == 1) &&
-            (s[ts[last - 2].st] == '&')) {
-          append = true;
+            ((token.type === Tokens.NUMBER) ||
+              ((token.type === Tokens.WORD) &&
+              (s[token.st] == 'x'))) &&
+            (ts[last - 1]!.length == 1) &&
+            (s[ts[last - 1]!.st] == '#') &&
+            (ts[last - 1]!.length == 1) &&
+            (s[ts[last - 1]!.st] == '&')) {
+          if (s[token.st] == 'x') {
+            code = parseInt(token.toString().substr(1), 16);
+          } else {
+            code = parseInt(token.toString(), 10);
+          }
+          ch = String.fromCharCode(code);
 
-          token = ts[last - 2];
-          token.length += ts[last - 1].length + ts[last].length;
-          token.allUpper = token.allUpper && ts[last - 1].allUpper && ts[last].allUpper;
-          token.type = Tokens.ENTITY;
-
-          ts.length -= 2;
-        }
-      } else
-      if (config.markdown &&
-          (ch == '[') &&
-          (token.length == 1) &&
-          (s[token.st] == '!')) {
-        append = true;
-        token.type = Tokens.MARKUP;
-      } else
-      if (config.markdown &&
-          (ch == '(') &&
-          (token.length == 1) &&
-          (s[token.st] == ']')) {
-        tokenType = Tokens.MARKUP;
-        tokenSubType = Tokens.LINK;
-      } else
-      if (config.wiki &&
-          (ch == '{') &&
-          (token.length == 1) &&
-          (s[token.st] == '{')) {
-        append = true;
-        token.type = Tokens.MARKUP;
-        token.subType = Tokens.TEMPLATE;
-      } else
-      if (config.wiki &&
-          (ch == '[') &&
-          (token.length == 1) &&
-          (s[token.st] == '[')) {
-        append = true;
-      } else
-      if (config.wiki &&
-          (ch == ']') &&
-          (token.length == 1) &&
-          (s[token.st] == ']')) {
-        append = true;
-      } else
-      if (config.wiki && (ch == '|') && !lineStart) {
-        let found = -1;
-        for (let j = last - 1; j >= 0; j--) {
-          if ((ts[j].length == 2) &&
-              (s[ts[j].st] == '[') &&
-              (s[ts[j].st + 1] == '[')) {
-            found = j;
-            break;
-          }
-          if (((ts[j].length == 1) &&
-                (s[ts[j].st] == '|')) ||
-              ts[j].indexOf('\n') > -1) {
-            break;
-          }
-        }
-        if (found > -1) {
-          append = true;
-          for (let j = last - 1; j >= found; j--) {
-            token = ts[j];
-            token.length += ts[j + 1].length;
-            token.allUpper = token.allUpper && ts[j + 1].allUpper;
-          }
-          last = found;
+          last -= 3;
+          token = ts[last] as Token;
           ts.length = last + 1;
-          token.subType = Tokens.LINK;
         }
       }
-    }
 
-    if (append) {
-      token.length++;
-      token.allUpper = token.allUpper && charUpper;
-    } else {
-      token = new Token(s, st, i + 1 - st, ts.length, charUpper, charUpper, tokenType, tokenSubType);
-      ts.push(token);
-    }
-  }
-  return this;
-}
+      let charType = Tokens.OTHER;
+      let charUpper = (ch!.toLocaleLowerCase() != ch);
+      if (code >= 0x0400 && code <= 0x04FF) charType = Tokens.CYRIL;
+      if ((code >= 0x0041 && code <= 0x005A) || (code >= 0x0061 && code <= 0x007A) || (code >= 0x00C0 && code <= 0x024F)) charType = Tokens.LATIN;
+      if (code >= 0x0030 && code <= 0x0039) charType = Tokens.DIGIT;
+      if ((code <= 0x0020) || (code >= 0x0080 && code <= 0x00A0)) charType = Tokens.SPACE;
+      if ('‐-−‒–—―.…,:;?!¿¡()[]«»"\'’‘’“”/⁄'.indexOf(ch!) > -1) charType = Tokens.PUNCT;
 
-function alwaysTrue() {
-  return true;
-}
+      let tokenType = charType;
+      let tokenSubType: boolean | string = false;
+      if (charType === Tokens.CYRIL || charType === Tokens.LATIN) {
+        tokenType = Tokens.WORD;
+        tokenSubType = charType;
+      } else
+      if (charType === Tokens.DIGIT) {
+        tokenType = Tokens.NUMBER;
+      }
 
-function getMatcher(filter: any, exclude: boolean) {
-  if (!filter) {
-    return alwaysTrue();
-  }
-  if (typeof filter == 'function') {
-    return filter;
-  }
-  let types = filter;
-  let exclusive: any;
-  if ('length' in filter) {
-    exclusive = !exclude;
-    types = {};
-    for (let i = 0; i < filter.length; i++) {
-      types[filter[i]] = true;
-    }
-  } else {
-    exclusive = exclude;
-    exclude = false;
-  }
-  return function(token: any, index: number, array: any) {
-    if (token.subType) {
-      let sub = token.type + '.' + token.subType;
-      if (sub in types) {
-        return types[sub] != exclude;
+      let lineStart = !token || (s[token.st + token.length - 1] == '\n');
+
+      if (config.wiki) {
+        if (lineStart) {
+          if (':;*#~|'.indexOf(ch!) > -1) {
+            tokenType = Tokens.MARKUP;
+            tokenSubType = Tokens.NEWLINE;
+          }
+        }
+        if ('={[|]}'.indexOf(ch!) > -1) {
+          tokenType = Tokens.MARKUP;
+        }
+      }
+
+      if (config.markdown) {
+        if (lineStart) {
+          if ('=-#>+-'.indexOf(ch!) > -1) {
+            tokenType = Tokens.MARKUP;
+            tokenSubType = Tokens.NEWLINE;
+          }
+        }
+        if ('[]*~_`\\'.indexOf(ch!) > -1) {
+          tokenType = Tokens.MARKUP;
+        }
+      }
+
+      if (token) {
+        if (config.wiki &&
+            (ch != "'") &&
+            (token.length == 1) &&
+            (s[token.st] == "'") &&
+            (last > 0) &&
+            (ts[last - 1]!.type === Tokens.WORD) &&
+            (ts[last - 1]!.subType === Tokens.LATIN)) {
+          ts[last - 1]!.length += token.length;
+
+          last -= 1;
+          ts.length = last + 1;
+          token = ts[last] as Token;
+        }
+
+        // Preprocess last token
+        if (config.links &&
+            config.links.tlds &&
+            ((charType === Tokens.PUNCT) ||
+              (charType === Tokens.SPACE)) &&
+            (ts.length > 2) &&
+            (ts[last - 2]!.type === Tokens.WORD) &&
+            (ts[last - 1]!.length == 1) &&
+            (s[ts[last - 1]!.st] == '.') &&
+            (ts[last]!.type === Tokens.WORD) &&
+            (token.toString() in config.links.tlds)) {
+
+          // Merge all subdomains
+          while ((last >= 2) &&
+                  (ts[last - 2]!.type === Tokens.WORD) &&
+                  (ts[last - 1]!.length == 1) &&
+                  ((s[ts[last - 1]!.st] == '.') ||
+                  (s[ts[last - 1]!.st] == '@') ||
+                  (s[ts[last - 1]!.st] == ':'))) {
+            last -= 2;
+            token = ts[last] as Token;
+            token.length += ts[last + 1]!.length + ts[last + 2]!.length;
+            token.allUpper = token.allUpper && ts[last + 1]!.allUpper && ts[last + 2]!.allUpper;
+          }
+
+          if (config.emails &&
+              (token.indexOf('@') > -1) &&
+              (token.indexOf(':') == -1)) {
+            // URL can contain a '@' but in that case it should be in form http://user@site.com or user:pass@site.com
+            // So if URL has a '@' but no ':' in it, we assume it's a email
+            token.type = Tokens.EMAIL;
+          } else {
+            token.type = Tokens.LINK;
+
+            if (ch == '/') {
+              append = true;
+            }
+          }
+          ts.length = last + 1;
+        } else
+
+        // Process next char (start new token or append to the previous one)
+        if (token.type === Tokens.LINK) {
+          if ((ch == ')') &&
+              (last >= 1) &&
+              (ts[last - 1]!.type === Tokens.MARKUP) &&
+              (ts[last - 1]!.length == 1) &&
+              (s[ts[last - 1]!.st] == '(')) {
+            tokenType = Tokens.MARKUP;
+          } else
+          if ((charType !== Tokens.SPACE) && (ch != ',') && (ch != '<')) {
+            append = true;
+          }
+        } else
+        if (token.type === Tokens.EMAIL) {
+          if ((charType === Tokens.CYRIL) || (charType === Tokens.LATIN) || (ch == '.')) {
+            append = true;
+          }
+        } else
+        if ((token.type === Tokens.HASHTAG) || (token.type === Tokens.MENTION)) {
+          if ((charType === Tokens.CYRIL) ||
+              (charType == Tokens.LATIN) ||
+              (charType == Tokens.DIGIT) ||
+              (ch == '_') || ((ch == '@') && (token.indexOf('@') == -1))) {
+            append = true;
+          }
+        } else
+        if ((token.type === Tokens.TAG) && (token.quote || (s[token.en()] != '>'))) {
+          append = true;
+          if (token.quote) {
+            if ((ch == token.quote) && (s[token.en()] != '\\')) {
+              delete token.quote;
+            }
+          } else
+          if ((ch == '"') || (ch == "'")) {
+            token.quote = ch;
+          }
+        } else
+        if (token.type === Tokens.CONTENT) {
+          append = true;
+          if (token.quote) {
+            if ((ch == token.quote) && (s[token.en()] != '\\')) {
+              delete token.quote;
+            }
+          } else
+          if ((ch == '"') || (ch == "'")) {
+            token.quote = ch;
+          } else
+          if (ch == '>') {
+            if ((token.length >= 8) && (token.toString().substr(-8) == '</script')) {
+              token.length -= 8;
+              st -= 8;
+
+              append = false;
+              tokenType = Tokens.TAG;
+              tokenSubType = Tokens.CLOSING;
+            } else
+            if ((token.length >= 7) && (token.toString().substr(-7) == '</style')) {
+              token.length -= 7;
+              st -= 7;
+
+              append = false;
+              tokenType = Tokens.TAG;
+              tokenSubType = Tokens.CLOSING;
+            }
+          }
+        } else
+        if ((token.type === Tokens.TAG) &&
+            (token.type !== Tokens.CLOSING) &&
+            (token.length >= 8) &&
+            (token.toLowerCase().substr(1, 6) == 'script')) {
+          tokenType = Tokens.CONTENT;
+          tokenSubType = Tokens.SCRIPT;
+        } else
+        if ((token.type === Tokens.TAG) &&
+            (token.type !== Tokens.CLOSING) &&
+            (token.length >= 7) &&
+            (token.toLowerCase().substr(1, 5) == 'style')) {
+          tokenType = Tokens.CONTENT;
+          tokenSubType = Tokens.STYLE;
+        } else
+        if (config.html &&
+            (token.length == 1) &&
+            (s[token.st] == '<') &&
+            ((charType === Tokens.LATIN) || (ch == '!') || (ch == '/'))) {
+          append = true;
+          token.type = Tokens.TAG;
+          if (ch == '!') {
+            token.subType = Tokens.COMMENT;
+          } else
+          if (ch == '/') {
+            token.subType = Tokens.CLOSING;
+          }
+        } else
+        if (token.type === Tokens.CONTENT) {
+          append = true;
+        } else
+        if ((token.type === Tokens.MARKUP) &&
+            (token.subType == Tokens.TEMPLATE) &&
+            ((s[token.en()] != '}') ||
+              (s[token.en() - 1] != '}'))) {
+          append = true;
+        } else
+        if ((token.type === Tokens.MARKUP) &&
+            (token.type === Tokens.LINK) &&
+            (s[token.en()] != ')')) {
+          append = true;
+        } else
+        if ((token.type === Tokens.MARKUP) &&
+            (s[token.st] == '`') &&
+            (token.subType === Tokens.NEWLINE) &&
+            (charType === Tokens.LATIN)) {
+          append = true;
+        } else
+        if ((charType === Tokens.CYRIL) || (charType === Tokens.LATIN)) {
+          if (token.type === Tokens.WORD) {
+            append = true;
+            token.subType = (token.subType == charType) ? token.subType : Tokens.MIXED;
+          } else
+          if (token.type === Tokens.NUMBER) { // Digits + ending
+            append = true;
+            token.subType = (token.subType && token.subType != charType) ? Tokens.MIXED : charType;
+          } else
+          if (config.hashtags && (token.length == 1) && (s[token.st] == '#')) { // Hashtags
+            append = true;
+            token.type = Tokens.HASHTAG;
+          } else
+          if (config.mentions &&
+              (token.length == 1) &&
+              (s[token.st] == '@') &&
+              ((last == 0) || (ts[last - 1]!.type === Tokens.SPACE))) { // Mentions
+            append = true;
+            token.type = Tokens.MENTION;
+          } else
+          if ((charType === Tokens.LATIN) &&
+              (token.length == 1) &&
+              ((s[token.st] == "'") || (s[token.st] == '’'))) {
+            append = true;
+            token.type = Tokens.WORD;
+            token.subType = Tokens.LATIN;
+          } else
+          if ((token.length == 1) && (s[token.st] == '-')) { // -цать (?), 3-й
+            append = true;
+
+            if ((last > 0) && (ts[last - 1]!.type === Tokens.NUMBER)) {
+              token = ts[last - 1]!;
+              token.length += ts[last]!.length;
+
+              ts.length -= 1;
+            }
+
+            token.type = Tokens.WORD;
+            token.subType = charType;
+          }
+        } else
+        if (charType === Tokens.DIGIT) {
+          if (token.type === Tokens.WORD) {
+            append = true;
+            token.subType = Tokens.MIXED;
+          } else
+          if (token.type === Tokens.NUMBER) {
+            append = true;
+          } else
+          if ((token.length == 1) &&
+              ((s[token.st] == '+') || (s[token.st] == '-'))) {
+            append = true;
+
+            if ((last > 0) && (ts[last - 1]!.type === Tokens.NUMBER)) {
+              token = ts[last - 1]!;
+              token.length += ts[last]!.length;
+              token.subType = Tokens.RANGE;
+
+              ts.length -= 1;
+            }
+
+            token.type = Tokens.NUMBER;
+          } else
+          if ((token.length == 1) &&
+              ((s[token.st] == ',') || (s[token.st] == '.')) &&
+              (ts.length > 1) &&
+              (ts[last - 1]!.type === Tokens.NUMBER)) {
+            append = true;
+
+            token = ts[last - 1]!;
+            token.length += ts[last]!.length;
+
+            ts.length -= 1;
+          }
+        } else
+        if (charType === Tokens.SPACE) {
+          if (token.type === Tokens.SPACE) {
+            append = true;
+          }
+        } else
+        if ((token.type === Tokens.MARKUP) &&
+            (s[token.st] == ch) &&
+            ('=-~:*#`\'>_'.indexOf(ch!) > -1)) {
+          append = true;
+        } else
+        if (ch == '.') {
+          if (config.links &&
+              config.links.www &&
+              (token.length == 3) &&
+              (token.toLowerCase() == 'www')) { // Links without protocol but with www
+            append = true;
+            token.type = Tokens.LINK;
+          }
+        } else
+        if (config.wiki && (ch == "'") && (s[token.en()] == "'")) {
+          if (token.length > 1) {
+            token.length--;
+            st--;
+            tokenType = Tokens.MARKUP;
+          } else {
+            append = true;
+            token.type = Tokens.MARKUP;
+          }
+        } else
+        if ((ch == '-') ||
+            ((token.subType == Tokens.LATIN) &&
+              ((ch == '’') || (ch == "'")))) {
+          if (token.type === Tokens.WORD) {
+            append = true;
+          }
+        } else
+        if (ch == '/') {
+          if (config.links &&
+              config.links.protocols &&
+              (ts.length > 2) &&
+              (ts[last - 2]!.type === Tokens.WORD) &&
+              (ts[last - 2]!.subType == Tokens.LATIN) &&
+              (ts[last - 1]!.length == 1) &&
+              (s[ts[last - 1]!.st] == ':') &&
+              (ts[last]!.length == 1) &&
+              (s[ts[last]!.st] == '/')) { // Links (with protocols)
+            append = true;
+
+            token = ts[last - 2]!;
+            token.length += ts[last - 1]!.length + ts[last]!.length;
+            token.allUpper = token.allUpper && ts[last - 1]!.allUpper && ts[last]!.allUpper;
+            token.type = Tokens.LINK;
+
+            ts.length -= 2;
+          }
+        } else
+        if (config.html && ch == ';') {
+          if ((last > 0) &&
+              (token.type === Tokens.WORD) &&
+              (ts[last - 1]!.length == 1) &&
+              (s[ts[last - 1]!.st] == '&')) {
+            append = true;
+
+            token = ts[last - 1]!;
+            token.length += ts[last]!.length;
+            token.allUpper = token.allUpper && ts[last - 1]!.allUpper;
+            token.type = Tokens.ENTITY;
+
+            ts.length -= 1;
+          } else
+          if ((last > 1) &&
+              ((token.type === Tokens.WORD) ||
+                (token.type === Tokens.NUMBER)) &&
+              (ts[last - 1]!.length == 1) &&
+              (s[ts[last - 1]!.st] == '#') &&
+              (ts[last - 2]!.length == 1) &&
+              (s[ts[last - 2]!.st] == '&')) {
+            append = true;
+
+            token = ts[last - 2] as Token;
+            token.length += ts[last - 1]!.length + ts[last]!.length;
+            token.allUpper = token.allUpper && ts[last - 1]!.allUpper && ts[last]!.allUpper;
+            token.type = Tokens.ENTITY;
+
+            ts.length -= 2;
+          }
+        } else
+        if (config.markdown &&
+            (ch == '[') &&
+            (token.length == 1) &&
+            (s[token.st] == '!')) {
+          append = true;
+          token.type = Tokens.MARKUP;
+        } else
+        if (config.markdown &&
+            (ch == '(') &&
+            (token.length == 1) &&
+            (s[token.st] == ']')) {
+          tokenType = Tokens.MARKUP;
+          tokenSubType = Tokens.LINK;
+        } else
+        if (config.wiki &&
+            (ch == '{') &&
+            (token.length == 1) &&
+            (s[token.st] == '{')) {
+          append = true;
+          token.type = Tokens.MARKUP;
+          token.subType = Tokens.TEMPLATE;
+        } else
+        if (config.wiki &&
+            (ch == '[') &&
+            (token.length == 1) &&
+            (s[token.st] == '[')) {
+          append = true;
+        } else
+        if (config.wiki &&
+            (ch == ']') &&
+            (token.length == 1) &&
+            (s[token.st] == ']')) {
+          append = true;
+        } else
+        if (config.wiki && (ch == '|') && !lineStart) {
+          let found = -1;
+          for (let j = last - 1; j >= 0; j--) {
+            if ((ts[j]!.length == 2) &&
+                (s[ts[j]!.st] == '[') &&
+                (s[ts[j]!.st + 1] == '[')) {
+              found = j;
+              break;
+            }
+            if (((ts[j]!.length == 1) &&
+                  (s[ts[j]!.st] == '|')) ||
+                ts[j]!.indexOf('\n') > -1) {
+              break;
+            }
+          }
+          if (found > -1) {
+            append = true;
+            for (let j = last - 1; j >= found; j--) {
+              token = ts[j] as Token;
+              token.length += ts[j + 1]!.length;
+              token.allUpper = token.allUpper && ts[j + 1]!.allUpper;
+            }
+            last = found;
+            ts.length = last + 1;
+            token.subType = Tokens.LINK;
+          }
+        }
+      }
+
+      if (append) {
+        token.length++;
+        token.allUpper = token.allUpper && charUpper;
+      } else {
+        token = new Token(s, st, i + 1 - st, ts.length, charUpper, charUpper, tokenType, tokenSubType as string);
+        ts.push(token);
       }
     }
-    if (token.type in types) {
-      return types[token.type] != exclude;
-    } else {
-      return !exclusive;
-    }
+    return this;
   }
-}
 
-/**
+  /**
  * Завершает токенизацию, возвращая список токенов.
  *
  * Эта и другие функции принимают последними параметрами filter и флаг exclude. Они
@@ -741,71 +764,65 @@ function getMatcher(filter: any, exclude: boolean) {
  *  токены со всеми типами, за исключением перечисленных в filter.
  * @returns {Token[]} Список токенов после фильтрации.
  */
-Tokens.prototype.done = function(filter: any, exclude: boolean): string[] {
-  // Finalize tokenizing, return list of tokens
-  // For now it just returns tokens, in the future there could be some additional work
-  if (!filter) {
-    return this.tokens;
-  }
-  let matcher = getMatcher(filter, exclude);
-  let list = [];
-  for (let i = 0; i < this.tokens.length; i++) {
-    if (matcher(this.tokens[i], i, this.tokens)) {
-      list.push(this.tokens[i]);
+  done(filter: any, exclude: boolean): Token[] {
+    // Finalize tokenizing, return list of tokens
+    // For now it just returns tokens, in the future there could be some additional work
+    if (!filter) {
+      return this.tokens as Token[];
     }
+    let matcher = getMatcher(filter, exclude);
+    let list: Token[] = [];
+    for (let i = 0; i < this.tokens!.length; i++) {
+      if (matcher(this.tokens![i], i, this.tokens)) {
+        list.push(this.tokens![i] as Token);
+      }
+    }
+    return list;
   }
-  return list;
-}
 
-/**
+
+  /**
  * Возвращает токен по его индексу.
  *
  * @param {Function|String[]|Object} [filter] См. описание метода done.
  * @param {boolean} [exclude=False] См. описание метода done.
  * @returns {Token|False} Токен или false, если индекс вышел за пределы массива токенов.
  */
-Tokens.prototype.get = function(index: number, filter: any, exclude: boolean) {
-  if (index < 0) {
+  get(index: number, filter: any, exclude: boolean): Token | boolean {
+    if (index < 0) {
+      return false;
+    }
+    if (!filter) {
+      return this.tokens![index] as Token;
+    }
+    let matcher = getMatcher(filter, exclude);
+    let idx = 0;
+    for (let i = 0; i < this.tokens!.length; i++) {
+      if (matcher(this.tokens![i], i, this.tokens)) {
+        if (idx == index) {
+          return this.tokens![i] as Token;
+        }
+        idx++;
+      }
+    }
     return false;
   }
-  if (!filter) {
-    return this.tokens[index];
-  }
-  let matcher = getMatcher(filter, exclude);
-  let idx = 0;
-  for (let i = 0; i < this.tokens.length; i++) {
-    if (matcher(this.tokens[i], i, this.tokens)) {
-      if (idx == index) {
-        return this.tokens[i];
+
+  count(filter: any, exclude: boolean): number {
+    if (!filter) {
+      return this.tokens!.length;
+    }
+    let matcher = getMatcher(filter, exclude);
+    let count = 0;
+    for (let i = 0; i < this.tokens!.length; i++) {
+      if (matcher(this.tokens![i], i, this.tokens)) {
+        count++;
       }
-      idx++;
     }
+    return count;
   }
-  return false;
-}
 
-/**
- * Подсчитывает текущее количество токенов.
- *
- * @param {Function|String[]|Object} [filter] См. описание метода done.
- * @param {boolean} [exclude=False] См. описание метода done.
- * @returns {Number} Число токенов после фильтрации.
- */
-Tokens.prototype.count = function(filter: any, exclude: boolean) {
-  if (!filter) {
-    return this.tokens.length;
-  }
-  let matcher = getMatcher(filter, exclude);
-  let count = 0;
-  for (let i = 0; i < this.tokens.length; i++) {
-    if (matcher(this.tokens[i], i, this.tokens)) {
-      count++;
-    }
-  }
-  return count;
-}
-
-/**
+  /**
  * Получает следующий токен относительно текущей позиции.
  *
  * @param {boolean} moveIndex Следует ли переместить указатель к
@@ -816,74 +833,76 @@ Tokens.prototype.count = function(filter: any, exclude: boolean) {
  * @returns {Token|null} Следующий токен или null, если подходящих токенов
  *  впереди нет.
  */
-Tokens.prototype.nextToken = function(moveIndex: boolean, filter: any, exclude: boolean) {
-  let matcher = getMatcher(filter, exclude);
-  let index = this.index;
-  index++;
-  while (index < this.tokens.length && matcher(this.tokens[index], index, this.tokens)) {
+  nextToken(moveIndex: boolean, filter: any, exclude: boolean): Token | null  {
+    let matcher = getMatcher(filter, exclude);
+    let index = this.index!;
     index++;
-  }
-  if (index < this.tokens.length) {
-    if (moveIndex) {
-      this.index = index;
+    while (index < this.tokens!.length && matcher(this.tokens![index], index, this.tokens)) {
+      index++;
     }
-    return this.tokens[index];
+    if (index < this.tokens!.length) {
+      if (moveIndex) {
+        this.index = index;
+      }
+      return this.tokens![index] as Token;
+    }
+    return null;
   }
-  return null;
-}
 
-/**
- * Проверяет, является ли следующий (за исключением пробелов) токен знаком
- * препинания или нет.
- *
- * @returns {Token|False} False, если следующий токен не является знаком
- *  препинания, либо сам токен в противном случае.
- */
-Tokens.prototype.punctAhead = function() {
-  let token = this.nextToken(false, ['SPACE'], true);
-  return token && token.type == 'PUNCT' && token;
-}
+    /**
+   * Проверяет, является ли следующий (за исключением пробелов) токен знаком
+   * препинания или нет.
+   *
+   * @returns {Token|False} False, если следующий токен не является знаком
+   *  препинания, либо сам токен в противном случае.
+   */
+  punctAhead(): Token | boolean {
+    let token = this.nextToken(false, ['SPACE'], true) as Token;
+    return token && token.type == 'PUNCT' && token;
+  }
 
-/**
- * Получает предыдущий токен относительно текущей позиции.
- *
- * @param {boolean} moveIndex Следует ли переместить указатель к
- *  предыдущему токену (в противном случае следующий вызов prevToken вернет
- *  тот же результат)
- * @param {Function|String[]|Object} [filter] См. описание метода done.
- * @param {boolean} [exclude=False] См. описание метода done.
- * @returns {Token|null} Предыдущий токен или null, если подходящих токенов
- *  позади нет.
- */
-Tokens.prototype.prevToken = function(moveIndex: boolean, filter: any, exclude: boolean) {
-  let matcher = getMatcher(filter, exclude);
-  let index = this.index;
-  index--;
-  while (index >= 0 && matcher(this.tokens[index], index, this.tokens)) {
+
+  /**
+   * Получает предыдущий токен относительно текущей позиции.
+   *
+   * @param {boolean} moveIndex Следует ли переместить указатель к
+   *  предыдущему токену (в противном случае следующий вызов prevToken вернет
+   *  тот же результат)
+   * @param {Function|String[]|Object} [filter] См. описание метода done.
+   * @param {boolean} [exclude=False] См. описание метода done.
+   * @returns {Token|null} Предыдущий токен или null, если подходящих токенов
+   *  позади нет.
+   */
+  prevToken(moveIndex: boolean, filter: any, exclude: boolean): Token | null {
+    let matcher = getMatcher(filter, exclude);
+    let index = this.index as number;
     index--;
-  }
-  if (index >= 0) {
-    if (moveIndex) {
-      this.index = index;
+    while (index >= 0 && matcher(this.tokens![index], index, this.tokens)) {
+      index--;
     }
-    return this.tokens[index];
+    if (index >= 0) {
+      if (moveIndex) {
+        this.index = index;
+      }
+      return this.tokens![index] as Token;
+    }
+    return null;
   }
-  return null;
-}
 
-/**
+
+  /**
  * Проверяет, является ли предыдущий (за исключением пробелов) токен знаком
  * препинания или нет.
  *
  * @returns {Token|False} False, если предыдущий токен не является знаком
  *  препинания, либо сам токен в противном случае.
  */
-Tokens.prototype.punctBehind = function() {
-  let token = this.prevToken(false, ['SPACE'], true);
-  return token && token.type == 'PUNCT' && token;
-}
+  punctBehind(): Token | boolean {
+    let token = this.prevToken(false, ['SPACE'], true) as Token;
+    return token && token.type == 'PUNCT' && token;
+  }
 
-/**
+  /**
  * Проверяет, есть ли впереди текущей позиции токены, удовлетворяющие фильтру.
  *
  * @param {Function|String[]|Object} [filter] См. описание метода done.
@@ -891,11 +910,11 @@ Tokens.prototype.punctBehind = function() {
  * @returns {boolean} True если впереди есть хотя бы один подходящий токен,
  *  и False в противном случае.
  */
-Tokens.prototype.hasTokensAhead = function(filter: any, exclude: boolean) {
-  return this.nextToken(false, filter, exclude) != null;
-}
+  hasTokensAhead(filter: any, exclude: boolean): boolean {
+    return this.nextToken(false, filter, exclude) != null;
+  }
 
-/**
+  /**
  * Проверяет, есть ли позади текущей позиции токены, удовлетворяющие фильтру.
  *
  * @param {Function|String[]|Object} [filter] См. описание метода done.
@@ -903,8 +922,48 @@ Tokens.prototype.hasTokensAhead = function(filter: any, exclude: boolean) {
  * @returns {boolean} True если позади есть хотя бы один подходящий токен,
  *  и False в противном случае.
  */
-Tokens.prototype.hasTokensBehind = function(filter: any, exclude: boolean) {
-  return this.prevToken(false, filter, exclude) != null;
+  hasTokensBehind(filter: any, exclude: boolean): boolean {
+    return this.prevToken(false, filter, exclude) != null;
+  }
+
 }
 
+function alwaysTrue(): boolean {
+  return true;
+}
 
+function getMatcher(filter: any, exclude: boolean): any {
+  if (!filter) {
+    return alwaysTrue();
+  }
+  if (typeof filter == 'function') {
+    return filter;
+  }
+  let types = filter;
+  let exclusive: any;
+  if ('length' in filter) {
+    exclusive = !exclude;
+    types = {};
+    for (let i = 0; i < filter.length; i++) {
+      types[filter[i]] = true;
+    }
+  } else {
+    exclusive = exclude;
+    exclude = false;
+  }
+  return function(token: any, index: number, array: any) {
+    if (token.subType) {
+      let sub = token.type + '.' + token.subType;
+      if (sub in types) {
+        return types[sub] != exclude;
+      }
+    }
+    if (token.type in types) {
+      return types[token.type] != exclude;
+    } else {
+      return !exclusive;
+    }
+  }
+}
+
+export {Tokens}

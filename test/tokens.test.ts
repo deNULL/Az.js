@@ -3,13 +3,13 @@ import {Tokens} from '../dist/az.tokens'
 
 describe('Az.Tokens', function() {
   it('should return empty array for empty string', function () {
-    let result = Tokens('').done();
+    let result = new Tokens('').done();
     expect(result).toBeInstanceOf(Array);
     expect(result).toHaveLength(0);
   });
 
   it('should parse simple tokens correctly', function () {
-    let result = Tokens('Мама мыла раму. What is 42?').done();
+    let result = new Tokens('Мама мыла раму. What is 42?').done();
     expect(result).toBeInstanceOf(Array);
     expect(result).toHaveLength(13);
     expect(result[0].type).toEqual('WORD');      // Мама
@@ -45,7 +45,7 @@ describe('Az.Tokens', function() {
   });
 
   it('should parse links correctly', function () {
-    let result = Tokens('http://site,vk.com,сайт.рф .ru com.').done();
+    let result = new Tokens('http://site,vk.com,сайт.рф .ru com.').done();
     expect(result).toBeInstanceOf(Array);
     expect(result).toHaveLength(11);
     expect(result[0].type).toEqual('LINK');
@@ -64,7 +64,7 @@ describe('Az.Tokens', function() {
   });
 
   it('should parse hashtags correctly', function () {
-    let result = Tokens('#1 #tag # #tag@user').done();
+    let result = new Tokens('#1 #tag # #tag@user').done();
     expect(result).toBeInstanceOf(Array);
     expect(result).toHaveLength(8);
     expect(result[0].type).toEqual('OTHER');
