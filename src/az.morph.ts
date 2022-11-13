@@ -82,109 +82,139 @@ function deepFreeze(obj: any) {
  * @property {string[]} flex Полный список изменяемых граммем.
  * @property {Tag} ext Копия тега с русскими обозначениями (по версии OpenCorpora).
  */
-let Tag: any = function(this: any, str: any) {
-  let par: any, pair: any = str.split(' ');
-  this.stat = pair[0].split(',');
-  this.flex = pair[1] ? pair[1].split(',') : [];
-  for (let j: number = 0; j < 2; j++) {
-    let statOrFlex: any = ['stat', 'flex'][j];
-    let grams: any = this[statOrFlex];
-    for (let i = 0; i < grams.length; i++) {
-      let gram = grams[i];
-      this[gram] = true;
-      // loc2 -> loct -> CAse
-      while (grammemes[gram] && (par = grammemes[gram].parent)) {
-        this[par] = gram;
-        gram = par;
+class Tag {
+  stat: string[];
+  flex: string[];
+  ext?: Tag;
+  [statOrFlex: string]: any;
+  [index: number]: any;
+  POST?: string
+  POS?: string
+
+  NPRO?: boolean;
+  NUMR?: boolean;
+  PRED?: boolean;
+  PREP?: boolean;
+  CONJ?: boolean;
+  PRCL?: boolean;
+  INTJ?: boolean;
+  Apro?: boolean;
+  NUMB?: boolean;
+  ROMN?: boolean;
+  LATN?: boolean;
+  PNCT?: boolean;
+  UNKN?: boolean;
+
+  Name?: boolean;
+  Surn?: boolean;
+  Patr?: boolean;
+  Geox?: boolean;
+  Init?: boolean;
+
+  constructor(public str: string) {
+    let par: any, pair: any = str.split(' ');
+    this.stat = pair[0].split(',');
+    this.flex = pair[1] ? pair[1].split(',') : [];
+    for (let j: number = 0; j < 2; j++) {
+      let statOrFlex: string = ['stat', 'flex'][j] as string;
+      let grams: any = this[statOrFlex];
+      for (let i = 0; i < grams.length; i++) {
+        let gram = grams[i];
+        this[gram] = true;
+        // loc2 -> loct -> CAse
+        while (grammemes[gram] && (par = grammemes[gram].parent)) {
+          this[par] = gram;
+          gram = par;
+        }
       }
     }
+    if ('POST' in this) {
+      this.POS = this.POST;
+    }
   }
-  if ('POST' in this) {
-    this.POS = this.POST;
-  }
-}
 
-/**
+  /**
  * Возвращает текстовое представление тега.
  *
  * @returns {string} Список неизменяемых граммем через запятую, пробел,
  *  и список изменяемых граммем через запятую.
  */
-Tag.prototype.toString = function() {
-  return (this.stat.join(',') + ' ' + this.flex.join(',')).trim();
-}
+  toString(): string {
+    return (this.stat.join(',') + ' ' + this.flex.join(',')).trim();
+  }
 
-/**
- * Проверяет согласованность с конкретными значениями граммем либо со списком
- * граммем из другого тега (или слова).
- *
- * @param {Tag|Parse} [tag] Тег или разбор слова, с которым следует
- *  проверить согласованность.
- * @param {Array|Object} grammemes Граммемы, по которым нужно проверить
- *  согласованность.
- *
- *  Если указан тег (или разбор), то grammemes должен быть массивом тех
- *  граммем, которые у обоих тегов должны совпадать. Например:
- *  tag.matches(otherTag, ['POS', 'GNdr'])
- *
- *  Если тег не указан, а указан массив граммем, то проверяется просто их
- *  наличие. Например, аналог выражения (tag.NOUN && tag.masc):
- *  tag.matches([ 'NOUN', 'masc' ])
- *
- *  Если тег не указан, а указан объект, то ключи в нем — названия граммем,
- *  значения — дочерние граммемы, массивы граммем, либо true/false:
- *  tag.matches({ 'POS' : 'NOUN', 'GNdr': ['masc', 'neut'] })
- * @returns {boolean} Является ли текущий тег согласованным с указанным.
- */
-// TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
-Tag.prototype.matches = function(tag: any, grammemes: any) {
-  if (!grammemes) {
-    if (Object.prototype.toString.call(tag) === '[object Array]') {
-      for (let i = 0; i < tag.length; i++) {
-        if (!this[tag[i]]) {
-          return false;
+    /**
+   * Проверяет согласованность с конкретными значениями граммем либо со списком
+   * граммем из другого тега (или слова).
+   *
+   * @param {Tag|Parse} [tag] Тег или разбор слова, с которым следует
+   *  проверить согласованность.
+   * @param {Array|Object} grammemes Граммемы, по которым нужно проверить
+   *  согласованность.
+   *
+   *  Если указан тег (или разбор), то grammemes должен быть массивом тех
+   *  граммем, которые у обоих тегов должны совпадать. Например:
+   *  tag.matches(otherTag, ['POS', 'GNdr'])
+   *
+   *  Если тег не указан, а указан массив граммем, то проверяется просто их
+   *  наличие. Например, аналог выражения (tag.NOUN && tag.masc):
+   *  tag.matches([ 'NOUN', 'masc' ])
+   *
+   *  Если тег не указан, а указан объект, то ключи в нем — названия граммем,
+   *  значения — дочерние граммемы, массивы граммем, либо true/false:
+   *  tag.matches({ 'POS' : 'NOUN', 'GNdr': ['masc', 'neut'] })
+   * @returns {boolean} Является ли текущий тег согласованным с указанным.
+   */
+  // TODO: научиться понимать, что некоторые граммемы можно считать эквивалентными при сравнении двух тегов (вариации падежей и т.п.)
+  matches(tag: Tag | Parse, grammemes: any): boolean {
+    if (!grammemes) {
+      if (Object.prototype.toString.call(tag) === '[object Array]') {
+        for (let i = 0; i < tag.length; i++) {
+          if (!this[tag[i]]) {
+            return false;
+          }
+        }
+        return true;
+      } else
+      // Match to map
+      for (let k in tag) {
+        if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
+          if (!tag[k].indexOf(this[k])) {
+            return false;
+          }
+        } else {
+          if (tag[k] != this[k]) {
+            return false;
+          }
         }
       }
       return true;
-    } else
-    // Match to map
-    for (let k in tag) {
-      if (Object.prototype.toString.call(tag[k]) === '[object Array]') {
-        if (!tag[k].indexOf(this[k])) {
-          return false;
-        }
-      } else {
-        if (tag[k] != this[k]) {
-          return false;
-        }
+    }
+
+    if (tag instanceof Parse) {
+      tag = tag.tag;
+    }
+
+    // Match to another tag
+    for (let i = 0; i < grammemes.length; i++) {
+      if (tag[grammemes[i]] != this[grammemes[i]]) {
+        // Special case: tag.CAse
+        return false;
       }
     }
     return true;
   }
 
-  if (tag instanceof Parse) {
-    tag = tag.tag;
+  isProductive(): boolean {
+    return !(this.NUMR || this.NPRO || this.PRED || this.PREP ||
+      this.CONJ || this.PRCL || this.INTJ || this.Apro ||
+      this.NUMB || this.ROMN || this.LATN || this.PNCT ||
+      this.UNKN);
   }
 
-  // Match to another tag
-  for (let i = 0; i < grammemes.length; i++) {
-    if (tag[grammemes[i]] != this[grammemes[i]]) {
-      // Special case: tag.CAse
-      return false;
-    }
+  isCapitalized(): boolean {
+    return this.Name! || this.Surn! || this.Patr! || this.Geox! || this.Init!;
   }
-  return true;
-}
-
-Tag.prototype.isProductive = function() {
-  return !(this.NUMR || this.NPRO || this.PRED || this.PREP ||
-    this.CONJ || this.PRCL || this.INTJ || this.Apro ||
-    this.NUMB || this.ROMN || this.LATN || this.PNCT ||
-    this.UNKN);
-}
-
-Tag.prototype.isCapitalized = function() {
-  return this.Name || this.Surn || this.Patr || this.Geox || this.Init;
 }
 
 function makeTag(tagInt: any, tagExt: any) {
@@ -248,7 +278,7 @@ function makeTag(tagInt: any, tagExt: any) {
  * @returns {Parse[]} Варианты разбора.
  * @memberof Az
  */
-export let Morph: any = function(word: any, config: any) {
+let Morph: any = function(word: any, config: any) {
   if (!initialized) {
     throw new Error('Please call Az.Morph.init() before using this module.');
   }
@@ -341,114 +371,118 @@ Morph.Parsers = {}
  * @property {number} stutterCnt Число «заиканий», исправленных в слове.
  * @property {number} typosCnt Число опечаток, исправленных в слове.
  */
-export let Parse: any = function(this: any, word: string, tag: any, score: number, stutterCnt: number, typosCnt: number) {
-  this.word = word;
-  this.tag = tag;
-  this.stutterCnt = stutterCnt || 0;
-  this.typosCnt = typosCnt || 0;
-  this.score = score || 0;
-}
+class Parse {
+  [index: number]: Parse;
+  length?: string;
 
-/**
- * Приводит слово к его начальной форме.
- *
- * @param {boolean} keepPOS Не менять часть речи при нормализации (например,
- *  не делать из причастия инфинитив).
- * @returns {Parse} Разбор, соответствующий начальной форме или False,
- *  если произвести нормализацию не удалось.
- */
-// TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
-Parse.prototype.normalize = function(keepPOS: boolean) {
-  return this.inflect(keepPOS ? { POS: this.tag.POS } : 0);
-}
+  constructor(public word: string, public tag: Tag, public score?: number, public stutterCnt?: number, public typosCnt?: number) {
+    this.stutterCnt = stutterCnt || 0;
+    this.typosCnt = typosCnt || 0;
+    this.score = score || 0;
+  }
 
-/**
- * Приводит слово к указанной форме.
- *
- * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
- *  согласовать данный.
- * @param {Array|Object} grammemes Граммемы, по которым нужно согласовать слово.
- * @returns {Parse|False} Разбор, соответствующий указанной форме или False,
- *  если произвести согласование не удалось.
- * @see Tag.matches
- */
-Parse.prototype.inflect = function(tag: any, grammemes: any) {
-  return this;
-}
+  /**
+   * Приводит слово к его начальной форме.
+   *
+   * @param {boolean} keepPOS Не менять часть речи при нормализации (например,
+   *  не делать из причастия инфинитив).
+   * @returns {Parse} Разбор, соответствующий начальной форме или False,
+   *  если произвести нормализацию не удалось.
+   */
+  // TODO: некоторые смены частей речи, возможно, стоит делать в любом случае (т.к., например, компаративы, краткие формы причастий и прилагательных разделены, инфинитив отделен от глагола)
+  normalize(keepPOS?: boolean): Parse {
+    return this.inflect(keepPOS ? { POS: this.tag.POS } : 0) as Parse;
+  }
 
-/**
- * Приводит слово к форме, согласующейся с указанным числом.
- * Вместо конкретного числа можно указать категорию (согласно http://www.unicode.org/cldr/charts/29/supplemental/language_plural_rules.html).
- *
- * @param {number|string} number Число, с которым нужно согласовать данное слово или категория, описывающая правило построения множественного числа.
- * @returns {Parse|False} Разбор, соответствующий указанному числу или False,
- *  если произвести согласование не удалось.
- */
-Parse.prototype.pluralize = function(number: any) {
-  if (!this.tag.NOUN && !this.tag.ADJF && !this.tag.PRTF) {
+  /**
+   * Приводит слово к указанной форме.
+   *
+   * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
+   *  согласовать данный.
+   * @param {Array|Object} grammemes Граммемы, по которым нужно согласовать слово.
+   * @returns {Parse|False} Разбор, соответствующий указанной форме или False,
+   *  если произвести согласование не удалось.
+   * @see Tag.matches
+  */
+  inflect(tag: any, grammemes?: any): Parse | boolean {
     return this;
   }
 
-  if (typeof number == 'number') {
-    number = number % 100;
-    if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
-      number = 'many';
+  /**
+   * Приводит слово к форме, согласующейся с указанным числом.
+   * Вместо конкретного числа можно указать категорию (согласно http://www.unicode.org/cldr/charts/29/supplemental/language_plural_rules.html).
+   *
+   * @param {number|string} number Число, с которым нужно согласовать данное слово или категория, описывающая правило построения множественного числа.
+   * @returns {Parse|False} Разбор, соответствующий указанному числу или False,
+   *  если произвести согласование не удалось.
+ */
+  pluralize(number: any): Parse | boolean {
+    if (!this.tag['NOUN'] && !this.tag['ADJF'] && !this.tag['PRTF']) {
+      return this;
+    }
+
+    if (typeof number == 'number') {
+      number = number % 100;
+      if ((number % 10 == 0) || (number % 10 > 4) || (number > 4 && number < 21)) {
+        number = 'many';
+      } else
+      if (number % 10 == 1) {
+        number = 'one';
+      } else {
+        number = 'few';
+      }
+    }
+
+    if (this.tag['NOUN'] && !this.tag['nomn'] && !this.tag['accs']) {
+      return this.inflect([number == 'one' ? 'sing' : 'plur', this.tag['CAse']]);
     } else
-    if (number % 10 == 1) {
-      number = 'one';
+    if (number == 'one') {
+      return this.inflect(['sing', this.tag['nomn'] ? 'nomn' : 'accs'])
+    } else
+    if (this.tag['NOUN'] && (number == 'few')) {
+      return this.inflect(['sing', 'gent']);
+    } else
+    if ((this.tag['ADJF'] || this.tag['PRTF']) && this.tag['femn'] && (number == 'few')) {
+      return this.inflect(['plur', 'nomn']);
     } else {
-      number = 'few';
+      return this.inflect(['plur', 'gent']);
     }
   }
 
-  if (this.tag.NOUN && !this.tag.nomn && !this.tag.accs) {
-    return this.inflect([number == 'one' ? 'sing' : 'plur', this.tag.CAse]);
-  } else
-  if (number == 'one') {
-    return this.inflect(['sing', this.tag.nomn ? 'nomn' : 'accs'])
-  } else
-  if (this.tag.NOUN && (number == 'few')) {
-    return this.inflect(['sing', 'gent']);
-  } else
-  if ((this.tag.ADJF || this.tag.PRTF) && this.tag.femn && (number == 'few')) {
-    return this.inflect(['plur', 'nomn']);
-  } else {
-    return this.inflect(['plur', 'gent']);
+    /**
+   * Проверяет, согласуется ли текущая форма слова с указанной.
+   *
+   * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
+   *  проверить согласованность.
+   * @param {Array|Object} grammemes Граммемы, по которым нужно проверить
+   *  согласованность.
+   * @returns {boolean} Является ли текущая форма слова согласованной с указанной.
+   * @see Tag.matches
+   */
+  matches(tag: any, grammemes?: any) {
+    return this.tag.matches(tag, grammemes);
   }
+
+  /**
+   * Возвращает текущую форму слова.
+   *
+   * @returns {String} Текущая форма слова.
+   */
+  toString() {
+    return this.word;
+  }
+
+  // Выводит информацию о слове в консоль.
+  log(): void {
+    console.group(this.toString());
+    console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
+    console.log(this.tag.ext?.toString());
+    console.groupEnd();
+  }
+
 }
 
-/**
- * Проверяет, согласуется ли текущая форма слова с указанной.
- *
- * @param {Tag|Parse} [tag] Тег или другой разбор слова, с которым следует
- *  проверить согласованность.
- * @param {Array|Object} grammemes Граммемы, по которым нужно проверить
- *  согласованность.
- * @returns {boolean} Является ли текущая форма слова согласованной с указанной.
- * @see Tag.matches
- */
-Parse.prototype.matches = function(tag: any, grammemes: any) {
-  return this.tag.matches(tag, grammemes);
-}
-
-/**
- * Возвращает текущую форму слова.
- *
- * @returns {String} Текущая форма слова.
- */
-Parse.prototype.toString = function() {
-  return this.word;
-}
-
-// Выводит информацию о слове в консоль.
-Parse.prototype.log = function() {
-  console.group(this.toString());
-  console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
-  console.log(this.tag.ext.toString());
-  console.groupEnd();
-}
-
-function lookup(dawg: any, word: any, config: any) {
+function lookup(dawg: DAWG, word: any, config: any) {
   let entries: any;
   if (config.typos == 'auto') {
     entries = dawg.findAll(word, config.replacements, config.stutter, 0);
@@ -461,127 +495,134 @@ function lookup(dawg: any, word: any, config: any) {
   return entries;
 }
 
-function getDictionaryScore(stutterCnt: any, typosCnt: any) {
+function getDictionaryScore(stutterCnt: number, typosCnt: number): number {
   return Math.pow(0.3, typosCnt) * Math.pow(0.6, Math.min(stutterCnt, 1));
 }
 
-let DictionaryParse: any = function(this: any, word: string, paradigmIdx: any, formIdx: any, stutterCnt: any, typosCnt: any, prefix: any, suffix: any) {
-  this.word = word;
-  this.paradigmIdx = paradigmIdx;
-  this.paradigm = paradigms[paradigmIdx];
-  this.formIdx = formIdx;
-  this.formCnt = this.paradigm.length / 3;
-  this.tag = tags[this.paradigm[this.formCnt + formIdx]];
-  this.stutterCnt = stutterCnt || 0;
-  this.typosCnt = typosCnt || 0;
-  this.score = getDictionaryScore(this.stutterCnt, this.typosCnt);
-  this.prefix = prefix || '';
-  this.suffix = suffix || '';
-}
+class DictionaryParse extends Parse {
+  paradigm: any;
+  formCnt: number;
+  tag: Tag;
+  score: number;
+  _base: any;
 
-DictionaryParse.prototype = Object.create(Parse.prototype);
-DictionaryParse.prototype.constructor = DictionaryParse;
-
-// Возвращает основу слова
-DictionaryParse.prototype.base = function() {
-  if (this._base) {
-    return this._base;
+  constructor(public word: string, public paradigmIdx: number, public formIdx: number, public stutterCnt?: number, public typosCnt?: number, public prefix?: string, public suffix?: string) {
+    super(word, tags[paradigms[paradigmIdx][paradigms[paradigmIdx].length / 3 + formIdx]]);
+    this.paradigm = paradigms[paradigmIdx];
+    this.formCnt = this.paradigm.length / 3;
+    this.tag = tags[this.paradigm[this.formCnt + formIdx]];
+    this.stutterCnt = stutterCnt || 0;
+    this.typosCnt = typosCnt || 0;
+    this.score = getDictionaryScore(this.stutterCnt, this.typosCnt);
+    this.prefix = prefix || '';
+    this.suffix = suffix || '';
   }
-  return (this._base = this.word.substring(
-    prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]].length,
-    this.word.length - suffixes[this.paradigm[this.formIdx]].length)
-  );
-}
 
-// Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
-// Всегда выбирается первый подходящий вариант.
-DictionaryParse.prototype.inflect = function(tag: any, grammemes: any) {
-  if (!grammemes && typeof tag === 'number') {
-    // Inflect to specific formIdx
-    return new DictionaryParse(
-        prefixes[this.paradigm[(this.formCnt << 1) + tag]] +
-        this.base() +
-        suffixes[this.paradigm[tag]],
-      this.paradigmIdx,
-      tag, 0, 0, this.prefix, this.suffix
+
+  // Возвращает основу слова
+  base(): any {
+    if (this._base) {
+      return this._base;
+    }
+    return (this._base = this.word.substring(
+      prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]].length,
+      this.word.length - suffixes[this.paradigm[this.formIdx]].length)
     );
   }
 
-  for (let formIdx = 0; formIdx < this.formCnt; formIdx++) {
-    if (tags[this.paradigm[this.formCnt + formIdx]].matches(tag, grammemes)) {
+  // Склоняет/спрягает слово так, чтобы оно соответствовало граммемам другого слова, тега или просто конкретным граммемам (подробнее см. Tag.prototype.matches).
+  // Всегда выбирается первый подходящий вариант.
+  inflect(tag: any, grammemes?: any): DictionaryParse | boolean {
+    if (!grammemes && typeof tag === 'number') {
+      // Inflect to specific formIdx
       return new DictionaryParse(
-          prefixes[this.paradigm[(this.formCnt << 1) + formIdx]] +
+          prefixes[this.paradigm[(this.formCnt << 1) + tag]] +
           this.base() +
-          suffixes[this.paradigm[formIdx]],
+          suffixes[this.paradigm[tag]],
         this.paradigmIdx,
-        formIdx, 0, 0, this.prefix, this.suffix
+        tag, 0, 0, this.prefix, this.suffix
       );
+    }
+
+    for (let formIdx = 0; formIdx < this.formCnt; formIdx++) {
+      if (tags[this.paradigm[this.formCnt + formIdx]].matches(tag, grammemes)) {
+        return new DictionaryParse(
+            prefixes[this.paradigm[(this.formCnt << 1) + formIdx]] +
+            this.base() +
+            suffixes[this.paradigm[formIdx]],
+          this.paradigmIdx,
+          formIdx, 0, 0, this.prefix, this.suffix
+        );
+      }
+    }
+
+    return false;
+  }
+
+  log() {
+    console.group(this.toString());
+    console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
+    console.log(prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
+    console.log(this.tag.ext!.toString());
+    let norm = this.normalize();
+    console.log('=> ', norm + ' (' + norm.tag.ext!.toString() + ')');
+    norm = this.normalize(true);
+    console.log('=> ', norm + ' (' + norm.tag.ext!.toString() + ')');
+    console.groupCollapsed('Все формы: ' + this.formCnt);
+    for (let formIdx = 0; formIdx < this.formCnt; formIdx++) {
+      let form = this.inflect(formIdx) as DictionaryParse;
+      console.log(form + ' (' + form.tag.ext!.toString() + ')');
+    }
+    console.groupEnd();
+    console.groupEnd();
+  }
+
+  toString() {
+    if (this.prefix) {
+      let pref = prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]];
+      return pref + this.prefix + this.word.substr(pref.length) + this.suffix;
+    } else {
+      return this.word + this.suffix;
+    }
+  }
+}
+
+
+class CombinedParse extends Parse {
+  formCnt: any;
+
+  constructor(public left: any, public right: any) {
+    super('', right.tag);
+    this.left = left;
+    this.right = right;
+    this.tag = right.tag;
+    this.score = left.score * right.score * 0.8;
+    this.stutterCnt = left.stutterCnt + right.stutterCnt;
+    this.typosCnt = left.typosCnt + right.typosCnt;
+    if ('formCnt' in right) {
+      this.formCnt = right.formCnt;
     }
   }
 
-  return false;
-}
+  inflect(tag: any, grammemes: any): CombinedParse | boolean {
+    let left;
 
-DictionaryParse.prototype.log = function() {
-  console.group(this.toString());
-  console.log('Stutter?', this.stutterCnt, 'Typos?', this.typosCnt);
-  console.log(prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]] + '|' + this.base() + '|' + suffixes[this.paradigm[this.formIdx]]);
-  console.log(this.tag.ext.toString());
-  let norm = this.normalize();
-  console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
-  norm = this.normalize(true);
-  console.log('=> ', norm + ' (' + norm.tag.ext.toString() + ')');
-  console.groupCollapsed('Все формы: ' + this.formCnt);
-  for (let formIdx = 0; formIdx < this.formCnt; formIdx++) {
-    let form = this.inflect(formIdx);
-    console.log(form + ' (' + form.tag.ext.toString() + ')');
+    let right = this.right.inflect(tag, grammemes);
+    if (!grammemes && typeof tag === 'number') {
+      left = this.left.inflect(right.tag, ['POST', 'NMbr', 'CAse', 'PErs', 'TEns']);
+    } else {
+      left = this.left.inflect(tag, grammemes);
+    }
+    if (left && right) {
+      return new CombinedParse(left, right);
+    } else {
+      return false;
+    }
   }
-  console.groupEnd();
-  console.groupEnd();
-}
 
-DictionaryParse.prototype.toString = function() {
-  if (this.prefix) {
-    let pref = prefixes[this.paradigm[(this.formCnt << 1) + this.formIdx]];
-    return pref + this.prefix + this.word.substr(pref.length) + this.suffix;
-  } else {
-    return this.word + this.suffix;
+  toString(): string {
+    return this.left.word + '-' + this.right.word;
   }
-}
-
-let CombinedParse: any = function(this: any, left: any, right: any) {
-  this.left = left;
-  this.right = right;
-  this.tag = right.tag;
-  this.score = left.score * right.score * 0.8;
-  this.stutterCnt = left.stutterCnt + right.stutterCnt;
-  this.typosCnt = left.typosCnt + right.typosCnt;
-  if ('formCnt' in right) {
-    this.formCnt = right.formCnt;
-  }
-}
-
-CombinedParse.prototype = Object.create(Parse.prototype);
-CombinedParse.prototype.constructor = CombinedParse;
-
-CombinedParse.prototype.inflect = function(tag: any, grammemes: any) {
-  let left;
-
-  let right = this.right.inflect(tag, grammemes);
-  if (!grammemes && typeof tag === 'number') {
-    left = this.left.inflect(right.tag, ['POST', 'NMbr', 'CAse', 'PErs', 'TEns']);
-  } else {
-    left = this.left.inflect(tag, grammemes);
-  }
-  if (left && right) {
-    return new CombinedParse(left, right);
-  } else {
-    return false;
-  }
-}
-
-CombinedParse.prototype.toString = function() {
-  return this.left.word + '-' + this.right.word;
 }
 
 __init.push(function() {
@@ -793,11 +834,11 @@ __init.push(function() {
     for (let i = 0; i < opts.length; i++) {
       if (!used[opts[i][0]]) {
         for (let j = 0; j < opts[i][1].length; j++) {
-          let parse = new DictionaryParse(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
+          let parse: DictionaryParse | Parse = new DictionaryParse(opts[i][0], opts[i][1][j][0], opts[i][1][j][1], opts[i][2], opts[i][3]);
           if (parse.matches(['ADJF', 'sing', 'datv'])) {
             used[opts[i][0]] = true;
 
-            parse = new Parse('по-' + opts[i][0], ADVB, parse.score * 0.9, opts[i][2], opts[i][3]);
+            parse = new Parse('по-' + opts[i][0], ADVB, parse.score! * 0.9, opts[i][2], opts[i][3]);
             parses.push(parse);
             break;
           }
@@ -985,7 +1026,7 @@ __init.push(function() {
         }
         if (p.length > 0) {
           for (let j = 0; j < p.length; j++) {
-            p[j].score /= max;
+            p[j]!.score /= max;
           }
           parses = parses.concat(p);
           // Check also suffixes 1 letter shorter
@@ -1149,3 +1190,5 @@ export const Init = function(path: string, callback: any) {
     loaded();
   });
 }
+
+export { Morph }
